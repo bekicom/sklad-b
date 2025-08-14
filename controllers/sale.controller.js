@@ -9,13 +9,11 @@ exports.createSale = async (req, res) => {
       req.body;
 
     let customerData;
+    customerData = await Customer.findOne({ phone: customer.phone });
 
     // 1️⃣ Mijozni topish yoki yaratish
-    if (customer._id) {
-      customerData = await Customer.findById(customer._id);
-      if (!customerData) {
-        return res.status(404).json({ message: "Mijoz topilmadi" });
-      }
+    if (customerData) {
+      console.log("mijoz bor");
     } else {
       if (!customer.name) {
         return res
@@ -108,8 +106,10 @@ exports.createSale = async (req, res) => {
       customerData.totalPurchased - customerData.totalPaid;
     await customerData.save();
 
-    res.json({ success: true, sale });
+    res.json({ success: true, sale, customer: customerData });
   } catch (err) {
+    console.log(err);
+
     res.status(500).json({ message: err.message });
   }
 };

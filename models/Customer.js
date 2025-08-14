@@ -7,7 +7,7 @@ const customerSchema = new mongoose.Schema(
     phone: { type: String, trim: true }, // Telefon raqami
     address: { type: String, trim: true }, // Manzili
     totalPurchased: { type: Number, default: 0 }, // Jami olingan mahsulot qiymati
-    totalPaid: { type: Number, default: 0 }, // Jami to‘langan
+    totalPaid: { type: Number, default: 0 }, // Jami to'langan
     totalDebt: { type: Number, default: 0 }, // Qolgan qarz
   },
   { timestamps: true }

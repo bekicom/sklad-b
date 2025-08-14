@@ -1,6 +1,6 @@
 const Debtor = require("../models/debtor.model");
 
-// 🆕 Yangi qarzdor qo‘shish
+// 🆕 Yangi qarzdor qo'shish
 exports.createDebtor = async (req, res) => {
   try {
     const { client, products, total_amount, paid_amount } = req.body;
@@ -35,7 +35,7 @@ exports.getDebtors = async (req, res) => {
   }
 };
 
-// 💵 Qarz to‘lash
+// 💵 Qarz to'lash
 // controllers/debtorController.js
 exports.updateDebtorPayment = async (req, res) => {
   try {
@@ -63,19 +63,19 @@ exports.updateDebtorPayment = async (req, res) => {
 };
 
 
-// ❌ Qarzdorni o‘chirish
+// ❌ Qarzdorni o'chirish
 exports.deleteDebtor = async (req, res) => {
   try {
     const { id } = req.params;
     await Debtor.findByIdAndDelete(id);
-    res.json({ success: true, message: "Qarzdor o‘chirildi" });
+    res.json({ success: true, message: "Qarzdor o'chirildi" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 
-// 🔘 Qarz to‘lash
+// 🔘 Qarz to'lash
 exports.payDebt = async (req, res) => {
   try {
     const { amount } = req.body;
@@ -88,7 +88,7 @@ exports.payDebt = async (req, res) => {
     // Qarzni kamaytirish
     client.totalDebt = Math.max(client.totalDebt - amount, 0);
 
-    // ✅ To‘lov tarixiga yozish
+    // ✅ To'lov tarixiga yozish
     if (!Array.isArray(client.paymentHistory)) {
       client.paymentHistory = [];
     }
@@ -100,13 +100,13 @@ exports.payDebt = async (req, res) => {
     await client.save();
 
     res.status(200).json({
-      message: "To‘lov qabul qilindi",
+      message: "To'lov qabul qilindi",
       client
     });
   } catch (err) {
     console.error("payDebt error:", err);
     res.status(500).json({
-      message: "To‘lovda xatolik",
+      message: "To'lovda xatolik",
       error: err.message
     });
   }
@@ -114,7 +114,7 @@ exports.payDebt = async (req, res) => {
 
 
 
-// 🔎 To‘lov tarixini olish
+// 🔎 To'lov tarixini olish
 exports.getClientPayments = async (req, res) => {
   try {
     const { id } = req.params;
