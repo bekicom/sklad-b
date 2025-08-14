@@ -28,14 +28,14 @@ const importSchema = new mongoose.Schema(
       type: [productSchema],
       validate: {
         validator: (arr) => arr.length > 0,
-        message: "Kamida bitta mahsulot bo‘lishi shart.",
+        message: "Kamida bitta mahsulot bo'lishi shart.",
       },
     },
 
     usd_to_uzs_rate: { type: Number, required: true, min: 0 }, // Kurs
 
     total_amount_uzs: { type: Number, default: 0, min: 0 }, // Jami summa (UZS)
-    paid_amount: { type: Number, default: 0, min: 0 }, // To‘langan
+    paid_amount: { type: Number, default: 0, min: 0 }, // To'langan
     remaining_debt: { type: Number, default: 0, min: 0 }, // Qarz
 
     partiya_number: { type: Number, required: true, min: 1 }, // Partiya raqami

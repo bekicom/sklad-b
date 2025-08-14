@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const saleSchema = new mongoose.Schema(
   {
     customer_id: {
-      // 🔹 nomini ham o‘zgartirdik
+      // 🔹 nomini ham o'zgartirdik
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",
       required: true,

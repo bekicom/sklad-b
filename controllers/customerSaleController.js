@@ -71,6 +71,16 @@ exports.createCustomerSale = async (req, res) => {
   }
 };
 
+exports.getAllCustomers = async (req, res) => {
+  try {
+    const customers = await Customer.find();
+    res.status(200).json(customers);
+  } catch (err) {
+    console.log(err.message);
+    return res.status(500).json({ message: "Serverda xatolik", err });
+  }
+};
+
 // 📄 Barcha mijoz sotuvlari
 exports.getAllCustomerSales = async (req, res) => {
   try {
@@ -97,7 +107,7 @@ exports.getCustomerDebtors = async (req, res) => {
   }
 };
 
-// 💰 Mijoz qarz to‘lashi
+// 💰 Mijoz qarz to'lashi
 exports.payCustomerDebt = async (req, res) => {
   try {
     const { amount } = req.body;

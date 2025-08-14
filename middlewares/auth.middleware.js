@@ -6,7 +6,7 @@ function verifyToken(req, res, next) {
   if (!token) return res.status(403).json({ message: "Token topilmadi" });
 
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(401).json({ message: "Token noto‘g‘ri" });
+    if (err) return res.status(401).json({ message: "Token noto'g'ri" });
     req.user = decoded;
     next();
   });

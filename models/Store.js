@@ -6,7 +6,7 @@ const storeSchema = new mongoose.Schema(
     // Mahsulot ma'lumotlari
     product_name: { type: String, required: true, trim: true }, // Mahsulot nomi
     model: { type: String, trim: true }, // Mahsulot modeli
-    unit: { type: String, enum: ["kg", "dona", "litr"], required: true }, // O‘lchov birligi
+    unit: { type: String, enum: ["kg", "dona", "litr"], required: true }, // O'lchov birligi
     quantity: { type: Number, required: true, min: 0 }, // Miqdor (kg/dona/litr)
     unit_price: { type: Number, min: 0 }, // Avtomatik hisoblanadi (total_price / quantity)
     total_price: { type: Number, required: true, min: 0 }, // Umumiy narx (UZS yoki USD)
@@ -15,10 +15,10 @@ const storeSchema = new mongoose.Schema(
     partiya_number: { type: Number, required: true }, // Partiya raqami
 
     // To'lov ma'lumotlari
-    paid_amount: { type: Number, default: 0, min: 0 }, // To‘langan summa
+    paid_amount: { type: Number, default: 0, min: 0 }, // To'langan summa
     remaining_debt: { type: Number, default: 0, min: 0 }, // Qolgan qarz
 
-    // Import bilan bog‘lanish
+    // Import bilan bog'lanish
     import_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Import",

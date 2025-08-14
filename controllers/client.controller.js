@@ -8,7 +8,7 @@ exports.createClient = async (req, res) => {
     const existing = await Client.findOne({ phone });
 
     if (existing) {
-      return res.status(200).json(existing); // allaqachon bor bo‘lsa, qaytaramiz
+      return res.status(200).json(existing); // allaqachon bor bo'lsa, qaytaramiz
     }
 
     const client = new Client({ name, phone, address });
@@ -62,19 +62,19 @@ exports.updateClient = async (req, res) => {
   }
 };
 
-// 🔘 Client o‘chirish
+// 🔘 Client o'chirish
 exports.deleteClient = async (req, res) => {
   try {
     await Client.findByIdAndDelete(req.params.id);
-    res.status(200).json({ message: "Client o‘chirildi" });
+    res.status(200).json({ message: "Client o'chirildi" });
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Clientni o‘chirishda xatolik", error: err.message });
+      .json({ message: "Clientni o'chirishda xatolik", error: err.message });
   }
 };
 
-// 🔘 Qarz to‘lash
+// 🔘 Qarz to'lash
 exports.payDebt = async (req, res) => {
   try {
     const { amount } = req.body;
@@ -89,9 +89,9 @@ exports.payDebt = async (req, res) => {
 
     await client.save();
 
-    res.status(200).json({ message: "To‘lov qabul qilindi", client });
+    res.status(200).json({ message: "To'lov qabul qilindi", client });
   } catch (err) {
-    res.status(500).json({ message: "To‘lovda xatolik", error: err.message });
+    res.status(500).json({ message: "To'lovda xatolik", error: err.message });
   }
 };
 
@@ -99,7 +99,7 @@ exports.payDebt = async (req, res) => {
 exports.getAllImports = async (req, res) => {
   try {
     const imports = await Import.find()
-      .populate("client") // client haqida to‘liq ma’lumot
+      .populate("client") // client haqida to'liq ma’lumot
       .sort({ createdAt: -1 });
 
     res.status(200).json(imports);
