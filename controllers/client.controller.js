@@ -1,14 +1,14 @@
 const Client = require("../models/Client");
 const Import = require("../models/Import");
 
-// 🔘 Client yaratish (importda ishlatiladi)
+// 🔘 Client yaratish
 exports.createClient = async (req, res) => {
   try {
     const { name, phone, address } = req.body;
     const existing = await Client.findOne({ phone });
 
     if (existing) {
-      return res.status(200).json(existing); // allaqachon bor bo'lsa, qaytaramiz
+      return res.status(200).json(existing);
     }
 
     const client = new Client({ name, phone, address });
@@ -77,53 +77,51 @@ exports.deleteClient = async (req, res) => {
 // 🔘 Qarz to'lash
 exports.payDebt = async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, note } = req.body;
     const client = await Client.findById(req.params.clientId);
 
     if (!client) {
       return res.status(404).json({ message: "Client topilmadi" });
     }
 
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: "To'lov summasi noto'g'ri" });
+    }
+
+    if (amount > client.totalDebt) {
+      return res
+        .status(400)
+        .json({ message: "To'lov summasi qarzdan ko'p bo'lishi mumkin emas" });
+    }
+
+    // 📌 To'lov tarixiga qo'shish
+    client.paymentHistory.push({
+      amount,
+      date: new Date(),
+      note: note || "Qarz to'lovi",
+    });
+
+    // 📌 Umumiy to‘langan summa va qolgan qarzni hisoblash
+    client.totalPaid = (client.totalPaid || 0) + amount;
     client.totalDebt -= amount;
     if (client.totalDebt < 0) client.totalDebt = 0;
 
     await client.save();
 
-    res.status(200).json({ message: "To'lov qabul qilindi", client });
+    res.status(200).json({
+      message: "To'lov qabul qilindi",
+      client: {
+        _id: client._id,
+        name: client.name,
+        phone: client.phone,
+        address: client.address,
+        totalPaid: client.totalPaid,
+        totalDebt: client.totalDebt,
+        paymentHistory: client.paymentHistory,
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: "To'lovda xatolik", error: err.message });
-  }
-};
-
-// 🔎 Barcha importlar (partiyalar)
-exports.getAllImports = async (req, res) => {
-  try {
-    const imports = await Import.find()
-      .populate("client") // client haqida to'liq ma’lumot
-      .sort({ createdAt: -1 });
-
-    res.status(200).json(imports);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Importlarni olishda xatolik", error: err.message });
-  }
-};
-
-// 🔍 Bitta import (partiya)ni olish
-exports.getImportById = async (req, res) => {
-  try {
-    const importData = await Import.findById(req.params.id).populate("client");
-
-    if (!importData) {
-      return res.status(404).json({ message: "Import topilmadi" });
-    }
-
-    res.status(200).json(importData);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Importni olishda xatolik", error: err.message });
   }
 };
 
@@ -131,7 +129,6 @@ exports.getImportById = async (req, res) => {
 exports.getClientStats = async (req, res) => {
   try {
     const clientId = req.params.id;
-
     const client = await Client.findById(clientId);
     if (!client) {
       return res.status(404).json({ message: "Client topilmadi" });
@@ -139,10 +136,8 @@ exports.getClientStats = async (req, res) => {
 
     const imports = await Import.find({ client: clientId });
 
-    // Partiyalar soni
     const totalPartiya = imports.length;
 
-    // Umumiy yuk qiymati (UZSga aylantirib)
     let totalAmountUZS = 0;
     imports.forEach((imp) => {
       imp.products.forEach((p) => {
@@ -154,18 +149,17 @@ exports.getClientStats = async (req, res) => {
       });
     });
 
-    // Umumiy qarz
-    const totalDebt = client.totalDebt || 0;
-
     res.status(200).json({
       client: {
         name: client.name,
         phone: client.phone,
         address: client.address,
       },
-      totalPartiya,
-      totalAmountUZS,
-      totalDebt,
+      partiesCount: totalPartiya,
+      totalAmount: totalAmountUZS,
+      totalPaid: client.totalPaid || 0,
+      totalDebt: client.totalDebt || 0,
+      paymentCount: client.paymentHistory?.length || 0,
     });
   } catch (err) {
     res
@@ -173,18 +167,19 @@ exports.getClientStats = async (req, res) => {
       .json({ message: "Statistikani olishda xatolik", error: err.message });
   }
 };
+
+// 📜 To'lov tarixini olish
 exports.getClientPayments = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const client = await Client.findById(id).select("payments name phone");
+    const client = await Client.findById(id).select(
+      "paymentHistory name phone"
+    );
     if (!client) {
-      return res.status(404).json({ message: "Mijoz topilmadi" });
+      return res.status(404).json({ message: "Client topilmadi" });
     }
-
-    res.json(client.payments || []);
+    res.json(client.paymentHistory || []);
   } catch (error) {
-    console.error("getClientPayments error:", error);
-    res.status(500).json({ message: "Server xatosi" });
+    res.status(500).json({ message: "Server xatosi", error: error.message });
   }
 };

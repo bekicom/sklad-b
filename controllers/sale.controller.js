@@ -1,16 +1,19 @@
 const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
 const Store = require("../models/Store");
+const Debtor = require("../models/debtor.model");
+const Client = require("../models/Client");
 
 // 🛒 Sotuv yaratish (mavjud kod + faktura raqami)
 exports.createSale = async (req, res) => {
   try {
-    const { customer, products, paid_amount, payment_method, shop_info } =
+    let { customer, products, paid_amount, payment_method, shop_info } =
       req.body;
+
+    paid_amount = Number(paid_amount) || 0;
 
     // 1️⃣ Mijozni topish yoki yaratish
     let customerData = await Customer.findOne({ phone: customer.phone });
-
     if (!customerData) {
       if (!customer.name) {
         return res
@@ -24,6 +27,7 @@ exports.createSale = async (req, res) => {
         totalPurchased: 0,
         totalPaid: 0,
         totalDebt: 0,
+        paymentHistory: [],
       });
     }
 
@@ -42,21 +46,18 @@ exports.createSale = async (req, res) => {
         });
       }
 
-      // ❗ Sotilishdan oldingi kelish narxi
       const purchase_price = product.unit_price || 0;
 
-      // Ombordagi miqdorni kamaytirish
       product.quantity -= p.quantity;
       await product.save();
 
-      // Sotuvga qo‘shish
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
         model: product.model,
         unit: product.unit,
-        price: p.price || product.sell_price, // sotish narxi
-        purchase_price, // kelish narxi (1 dona/kg)
+        price: p.price || product.sell_price,
+        purchase_price,
         quantity: p.quantity,
         currency: product.currency,
         partiya_number: product.partiya_number,
@@ -65,7 +66,19 @@ exports.createSale = async (req, res) => {
       total_amount += (p.price || product.sell_price) * p.quantity;
     }
 
-    // 3️⃣ Faktura raqamini yaratish
+    // 3️⃣ Qolgan qarz summasini hisoblash
+    const remaining_debt = total_amount - paid_amount;
+
+    // Payment method avtomatik aniqlash
+    if (!payment_method) {
+      if (remaining_debt > 0) {
+        payment_method = "qarz";
+      } else {
+        payment_method = "naxt";
+      }
+    }
+
+    // 4️⃣ Faktura raqami
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, "0");
@@ -82,7 +95,7 @@ exports.createSale = async (req, res) => {
       todayCount + 1
     ).padStart(3, "0")}`;
 
-    // 4️⃣ Sotuvni yaratish
+    // 5️⃣ Sotuvni yaratish
     const sale = await Sale.create({
       invoice_number,
       customer_id: customerData._id,
@@ -90,7 +103,7 @@ exports.createSale = async (req, res) => {
       total_amount,
       paid_amount,
       payment_method,
-      remaining_debt: total_amount - paid_amount,
+      remaining_debt,
       shop_info: shop_info || {
         name: "Sizning do'koningiz",
         address: "Do'kon manzili",
@@ -98,19 +111,37 @@ exports.createSale = async (req, res) => {
       },
     });
 
-    // 5️⃣ Mijoz balansini yangilash
+    // 6️⃣ Mijoz balansini yangilash
     customerData.totalPurchased += total_amount;
     customerData.totalPaid += paid_amount;
     customerData.totalDebt =
       customerData.totalPurchased - customerData.totalPaid;
+
+    // Agar qarz bo'lsa - paymentHistory ga yozamiz
+    if (remaining_debt > 0) {
+      if (!Array.isArray(customerData.paymentHistory)) {
+        customerData.paymentHistory = [];
+      }
+      if (paid_amount > 0) {
+        customerData.paymentHistory.push({
+          amount: paid_amount,
+          date: new Date(),
+          note: "Qarz to'lovi (sotuv vaqtida)",
+        });
+      }
+    }
+
     await customerData.save();
 
     res.json({ success: true, sale, customer: customerData });
   } catch (err) {
-    console.error(err);
+    console.error("❌ createSale error:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
+
+
 // 📄 Barcha sotuvlarni olish
 exports.getAllSales = async (req, res) => {
   try {
@@ -308,10 +339,17 @@ exports.getSalesStats = async (req, res) => {
       };
     }
 
+    // 📌 Sotuvlar
     const sales = await Sale.find(dateFilter).populate({
       path: "products.product_id",
       select: "purchase_price unit",
     });
+
+    // 📌 Mijozlardan qarz to‘lovlari (Customer.paymentHistory)
+    const customers = await Customer.find().select("payment_history");
+
+    // 📌 Yetkazib beruvchilardan qarz to‘lovlari (Client.paymentHistory)
+    const clients = await Client.find().select("paymentHistory");
 
     let stats = {
       total_sales_count: 0,
@@ -321,8 +359,11 @@ exports.getSalesStats = async (req, res) => {
       card_total: 0,
       debt_total: 0,
       product_details: {},
+      store_debt_received: 0, // 🆕 Do‘kondan kelgan qarz to‘lovlari
+      supplier_payments_total: 0, // 🆕 Yetkazib beruvchiga to‘langan pullar
     };
 
+    // 🔹 Sotuvlardan umumiy statistika
     sales.forEach((sale) => {
       stats.total_sales_count++;
       stats.total_revenue += sale.total_amount || 0;
@@ -332,8 +373,8 @@ exports.getSalesStats = async (req, res) => {
       } else if (sale.payment_method === "karta") {
         stats.card_total += sale.total_amount || 0;
       } else if (sale.payment_method === "qarz") {
-        stats.debt_total += sale.remaining_debt || 0; // ❗ faqat qarz qismini qo‘shamiz
-        stats.cash_total += sale.paid_amount || 0; // ❗ qarz bo‘lsa ham to‘langan qismi naxtga qo‘shilsin
+        stats.debt_total += sale.remaining_debt || 0;
+        stats.cash_total += sale.paid_amount || 0;
       }
 
       sale.products.forEach((p) => {
@@ -360,6 +401,20 @@ exports.getSalesStats = async (req, res) => {
         stats.product_details[p.name].revenue += revenue;
         stats.product_details[p.name].cost += cost;
         stats.product_details[p.name].profit += profit;
+      });
+    });
+
+    // 🔹 Do‘kondan qarz to‘lovlari
+    customers.forEach((cust) => {
+      (cust.payment_history || []).forEach((p) => {
+        stats.store_debt_received += p.amount || 0;
+      });
+    });
+
+    // 🔹 Yetkazib beruvchiga qarz to‘lovlari
+    clients.forEach((client) => {
+      (client.paymentHistory || []).forEach((p) => {
+        stats.supplier_payments_total += p.amount || 0;
       });
     });
 
