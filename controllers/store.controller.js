@@ -20,15 +20,11 @@ const getAllStoreItems = async (req, res) => {
 };
 
 /**
- * Import ID bo'yicha mahsulotlarni olish
- */
-
-/**
- * Importdan avtomatik omborga mahsulot yaratish
+ * Importdan omborga mahsulot yaratish (qo'lda narx kiritish)
  */
 const createStoreFromImport = async (importData) => {
   try {
-    console.log("Import data for store:", importData); // 🔍 Debug
+    console.log("Import data for store:", importData);
 
     const totalImportPrice = importData.products.reduce(
       (sum, p) => sum + (p.total_price || 0),
@@ -36,42 +32,37 @@ const createStoreFromImport = async (importData) => {
     );
 
     const storeItems = importData.products.map((item) => {
-      console.log("Processing item for store:", item); // 🔍 Debug
-
+      // Proportsional qarz hisoblash
       const totalPrice = item.total_price || 0;
-      const quantity = item.quantity || 0;
-
-      const unitPrice =
-        quantity > 0 ? Number((totalPrice / quantity).toFixed(2)) : 0;
-
-      // Proportsional qarz
       const proportionalPaid =
         totalImportPrice > 0
           ? (totalPrice / totalImportPrice) * (importData.paid_amount || 0)
           : 0;
-
       const remainingDebt = Math.max(totalPrice - proportionalPaid, 0);
 
       return {
-        product_name: item.title, // ✅ XATO: item.product_name emas, item.title
+        // ✅ TUZATILDI: product_name ishlatiladi (title emas)
+        product_name: item.product_name || item.title, // Ikkalasini ham qo'llab-quvvatlash
         model: item.model || "",
         unit: item.unit,
-        quantity,
-        unit_price: unitPrice,
-        total_price: totalPrice,
+        quantity: item.quantity || 0,
+
+        // ✅ Qo'lda kiritiladigan narxlar
+        purchase_price: item.unit_price || 0, // ✅ TUZATILDI: unit_price dan olinadi
         sell_price: item.sell_price || 0,
+
+        total_price: totalPrice,
         currency: item.currency,
         partiya_number: importData.partiya_number,
         import_id: importData._id,
-        supplier_id: importData.client, // ✅ XATO: client_id emas, client
+        supplier_id: importData.supplier_id || importData.client, // ✅ TUZATILDI: supplier_id ishlatiladi
         paid_amount: proportionalPaid,
         remaining_debt: remainingDebt,
         note: item.note || "",
       };
     });
 
-    console.log("Store items to create:", storeItems); // 🔍 Debug
-
+    console.log("Store items to create:", storeItems);
     await Store.insertMany(storeItems);
   } catch (error) {
     console.error("Store yaratishda xatolik:", error);
@@ -148,6 +139,10 @@ const deleteStoreItem = async (req, res) => {
     });
   }
 };
+
+/**
+ * Partiya bo'yicha guruhlash
+ */
 const getGroupedStoreItems = async (req, res) => {
   try {
     const usd_rate = Number(req.query.usd_rate) || 0;
@@ -164,7 +159,6 @@ const getGroupedStoreItems = async (req, res) => {
           total_price: 0,
           total_paid: 0,
           total_debt: 0,
-          currency: "UZS", // default
         };
       }
 
@@ -173,9 +167,9 @@ const getGroupedStoreItems = async (req, res) => {
       let debtUZS = item.remaining_debt || 0;
 
       if (item.currency === "USD") {
-        priceUZS = priceUZS * usd_rate;
-        paidUZS = paidUZS * usd_rate;
-        debtUZS = debtUZS * usd_rate;
+        priceUZS *= usd_rate;
+        paidUZS *= usd_rate;
+        debtUZS *= usd_rate;
       }
 
       map[key].products.push(item);
@@ -197,7 +191,9 @@ const getGroupedStoreItems = async (req, res) => {
   }
 };
 
-// controllers/store.controller.js
+/**
+ * Import ID bo'yicha mahsulotlarni olish
+ */
 const gSImportId = async (req, res) => {
   try {
     const { importId } = req.params;

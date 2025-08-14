@@ -5,7 +5,8 @@ const Store = require("../models/Store");
 // 🛒 Sotuv yaratish (mavjud kod + faktura raqami)
 exports.createSale = async (req, res) => {
   try {
-    const { customer, products, paid_amount, payment_method, shop_info } = req.body;
+    const { customer, products, paid_amount, payment_method, shop_info } =
+      req.body;
 
     let customerData;
 
@@ -45,18 +46,21 @@ exports.createSale = async (req, res) => {
         });
       }
 
+      // ❗ Sotilishdan oldingi kelish narxi
+      const purchase_price = product.unit_price || 0;
+
       // Ombordagi miqdorni kamaytirish
       product.quantity -= p.quantity;
       await product.save();
 
-      // Sotuvga qo'shish
+      // Sotuvga qo‘shish
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
         model: product.model,
         unit: product.unit,
-        price: p.price || product.sell_price,
-        purchase_price: product.unit_price,
+        price: p.price || product.sell_price, // sotish narxi
+        purchase_price, // kelish narxi (1 dona/kg)
         quantity: p.quantity,
         currency: product.currency,
         partiya_number: product.partiya_number,
@@ -68,17 +72,18 @@ exports.createSale = async (req, res) => {
     // 3️⃣ Faktura raqamini yaratish
     const today = new Date();
     const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    
-    // Bugungi sotuvlar sonini hisoblash
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+
     const todayStart = new Date(year, today.getMonth(), today.getDate());
     const todayEnd = new Date(year, today.getMonth(), today.getDate() + 1);
     const todayCount = await Sale.countDocuments({
-      createdAt: { $gte: todayStart, $lt: todayEnd }
+      createdAt: { $gte: todayStart, $lt: todayEnd },
     });
-    
-    const invoice_number = `INV-${year}${month}${day}-${String(todayCount + 1).padStart(3, '0')}`;
+
+    const invoice_number = `INV-${year}${month}${day}-${String(
+      todayCount + 1
+    ).padStart(3, "0")}`;
 
     // 4️⃣ Sotuvni yaratish
     const sale = await Sale.create({
@@ -92,8 +97,8 @@ exports.createSale = async (req, res) => {
       shop_info: shop_info || {
         name: "Sizning do'koningiz",
         address: "Do'kon manzili",
-        phone: "+998 90 123 45 67"
-      }
+        phone: "+998 90 123 45 67",
+      },
     });
 
     // 5️⃣ Mijoz balansini yangilash
@@ -108,6 +113,10 @@ exports.createSale = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+
+
 
 // 📄 Barcha sotuvlarni olish
 exports.getAllSales = async (req, res) => {
@@ -151,36 +160,36 @@ exports.getInvoiceData = async (req, res) => {
       // Faktura asosiy ma'lumotlari
       invoice_number: sale.invoice_number,
       date: sale.createdAt,
-      
+
       // Do'kon ma'lumotlari
       shop: sale.shop_info,
-      
+
       // Mijoz ma'lumotlari
       customer: {
         name: sale.customer_id.name,
         phone: sale.customer_id.phone,
-        address: sale.customer_id.address
+        address: sale.customer_id.address,
       },
-      
+
       // Mahsulotlar ro'yxati
-      products: sale.products.map(product => ({
+      products: sale.products.map((product) => ({
         name: product.name,
         model: product.model,
         unit: product.unit,
         quantity: product.quantity,
         price: product.price,
         total: product.price * product.quantity,
-        currency: product.currency
+        currency: product.currency,
       })),
-      
+
       // To'lov ma'lumotlari
       payment: {
         total_amount: sale.total_amount,
         paid_amount: sale.paid_amount,
         remaining_debt: sale.remaining_debt,
         payment_method: sale.payment_method,
-        payment_status: sale.remaining_debt > 0 ? 'qarz' : 'to\'liq to\'langan'
-      }
+        payment_status: sale.remaining_debt > 0 ? "qarz" : "to'liq to'langan",
+      },
     };
 
     res.json({ success: true, invoice: invoiceData });
@@ -199,11 +208,15 @@ exports.payDebt = async (req, res) => {
 
     // To'lov miqdorini tekshirish
     if (amount <= 0) {
-      return res.status(400).json({ message: "To'lov miqdori 0 dan katta bo'lishi kerak" });
+      return res
+        .status(400)
+        .json({ message: "To'lov miqdori 0 dan katta bo'lishi kerak" });
     }
 
     if (amount > sale.remaining_debt) {
-      return res.status(400).json({ message: "To'lov miqdori qarzdan katta bo'lishi mumkin emas" });
+      return res
+        .status(400)
+        .json({ message: "To'lov miqdori qarzdan katta bo'lishi mumkin emas" });
     }
 
     sale.paid_amount += amount;
@@ -247,17 +260,16 @@ exports.getDebtors = async (req, res) => {
 // 🔄 Faktura qayta chop etish
 exports.reprintInvoice = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id)
-      .populate("customer_id");
+    const sale = await Sale.findById(req.params.id).populate("customer_id");
 
     if (!sale) {
       return res.status(404).json({ message: "Faktura topilmadi" });
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: "Faktura qayta chop etishga tayyor",
-      sale 
+      sale,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -293,198 +305,76 @@ exports.deleteSale = async (req, res) => {
 
 exports.getSalesStats = async (req, res) => {
   try {
-    const granularity = (req.query.granularity || "day").toLowerCase();
-    const start = req.query.start
-      ? new Date(req.query.start)
-      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const end = req.query.end ? new Date(req.query.end) : new Date();
+    const { from, to } = req.query;
+    const dateFilter = {};
 
-    if (
-      !(start instanceof Date) ||
-      isNaN(start.getTime()) ||
-      !(end instanceof Date) ||
-      isNaN(end.getTime())
-    ) {
-      return res.status(400).json({ message: "start/end noto'g'ri sana" });
+    if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
+      dateFilter.createdAt = {
+        $gte: new Date(from),
+        $lte: new Date(to),
+      };
     }
 
-    const dateFmt = granularity === "month" ? "%Y-%m" : "%Y-%m-%d";
+    const sales = await Sale.find(dateFilter).populate({
+      path: "products.product_id",
+      select: "purchase_price unit", // 🔹 Asosiy tan narxini olamiz
+    });
 
-    const profitExpr = {
-      $sum: {
-        $map: {
-          input: "$products",
-          as: "p",
-          in: {
-            $multiply: [
-              {
-                $subtract: [
-                  "$$p.price",
-                  { $ifNull: ["$$p.purchase_price", 0] },
-                ],
-              },
-              { $ifNull: ["$$p.quantity", 0] },
-            ],
-          },
-        },
-      },
+    let stats = {
+      total_sales_count: 0,
+      total_revenue: 0,
+      total_profit: 0,
+      cash_total: 0,
+      card_total: 0,
+      debt_total: 0,
+      product_details: {},
     };
 
-    const seriesPipeline = [
-      { $match: { createdAt: { $gte: start, $lte: end } } },
-      {
-        $addFields: {
-          profit: profitExpr,
-          debtDoc: { $ifNull: ["$remaining_debt", 0] }
-        },
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: dateFmt, date: "$createdAt" } },
-          total: { $sum: "$total_amount" },
-          paid: { $sum: { $ifNull: ["$paid_amount", 0] } },
-          debt: { $sum: "$debtDoc" },
-          orders: { $sum: 1 },
-          profit: { $sum: "$profit" },
-        },
-      },
-      { $sort: { _id: 1 } },
-      {
-        $project: {
-          _id: 0,
-          date: "$_id",
-          total: 1,
-          paid: 1,
-          debt: 1,
-          orders: 1,
-          profit: 1,
-        },
-      },
-    ];
+    sales.forEach((sale) => {
+      stats.total_sales_count++;
+      stats.total_revenue += sale.total_amount || 0;
 
-    const summaryPipeline = [
-      { $match: { createdAt: { $gte: start, $lte: end } } },
-      {
-        $addFields: {
-          profit: profitExpr,
-          debtDoc: { $ifNull: ["$remaining_debt", 0] }
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: "$total_amount" },
-          paid: { $sum: { $ifNull: ["$paid_amount", 0] } },
-          debt: { $sum: "$debtDoc" },
-          orders: { $sum: 1 },
-          profit: { $sum: "$profit" },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          total: 1,
-          paid: 1,
-          debt: 1,
-          orders: 1,
-          profit: 1,
-          aov: {
-            $cond: [
-              { $gt: ["$orders", 0] },
-              { $divide: ["$total", "$orders"] },
-              0,
-            ],
-          },
-        },
-      },
-    ];
+      // 💰 To‘lov turi bo‘yicha ajratish
+      stats[`${sale.payment_method}_total`] += sale.total_amount || 0;
 
-    const paymentBreakdownPipeline = [
-      { $match: { createdAt: { $gte: start, $lte: end } } },
-      {
-        $group: {
-          _id: "$payment_method",
-          total: { $sum: "$total_amount" },
-          paid: { $sum: { $ifNull: ["$paid_amount", 0] } },
-          orders: { $sum: 1 },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          method: "$_id",
-          total: 1,
-          paid: 1,
-          orders: 1,
-          debt: { $max: [{ $subtract: ["$total", "$paid"] }, 0] },
-        },
-      },
-      { $sort: { total: -1 } },
-    ];
+      sale.products.forEach((p) => {
+        const product = p.product_id || {};
+        const purchasePrice = product.purchase_price || 0; // 🔹 Tan narx
+        const sellPrice = p.price || 0; // Sotish narxi
+        const quantity = p.quantity || 0;
 
-    const topProductsPipeline = [
-      { $match: { createdAt: { $gte: start, $lte: end } } },
-      { $unwind: "$products" },
-      {
-        $group: {
-          _id: {
-            id: "$products.product_id",
-            name: "$products.name",
-            unit: "$products.unit",
-          },
-          qty: { $sum: "$products.quantity" },
-          revenue: {
-            $sum: { $multiply: ["$products.price", "$products.quantity"] },
-          },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          product_id: "$_id.id",
-          name: "$_id.name",
-          unit: "$_id.unit",
-          qty: 1,
-          revenue: 1,
-        },
-      },
-      { $sort: { qty: -1, revenue: -1 } },
-      { $limit: 5 },
-    ];
+        const revenue = sellPrice * quantity;
+        const cost = purchasePrice * quantity;
+        const profit = revenue - cost;
 
-    const [series, summaryArr, paymentBreakdown, topProducts] =
-      await Promise.all([
-        Sale.aggregate(seriesPipeline),
-        Sale.aggregate(summaryPipeline),
-        Sale.aggregate(paymentBreakdownPipeline),
-        Sale.aggregate(topProductsPipeline),
-      ]);
+        stats.total_profit += profit;
 
-    const summary = summaryArr[0] || {
-      total: 0,
-      paid: 0,
-      debt: 0,
-      orders: 0,
-      aov: 0,
-      profit: 0,
-    };
+        if (!stats.product_details[p.name]) {
+          stats.product_details[p.name] = {
+            revenue: 0,
+            cost: 0,
+            profit: 0,
+            unit: p.unit,
+          };
+        }
+
+        stats.product_details[p.name].revenue += revenue;
+        stats.product_details[p.name].cost += cost;
+        stats.product_details[p.name].profit += profit;
+      });
+    });
+
+    stats.total_profit = Number(stats.total_profit.toFixed(2));
 
     res.json({
       success: true,
-      range: { start, end, granularity },
-      summary,
-      series,
-      paymentBreakdown,
-      topProducts,
+      stats,
     });
   } catch (err) {
-    console.error("getSalesStats error:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Statistika hisoblashda xatolik",
-        error: err.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
+
