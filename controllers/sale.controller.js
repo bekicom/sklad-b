@@ -8,13 +8,10 @@ exports.createSale = async (req, res) => {
     const { customer, products, paid_amount, payment_method, shop_info } =
       req.body;
 
-    let customerData;
-    customerData = await Customer.findOne({ phone: customer.phone });
-
     // 1️⃣ Mijozni topish yoki yaratish
-    if (customerData) {
-      console.log("mijoz bor");
-    } else {
+    let customerData = await Customer.findOne({ phone: customer.phone });
+
+    if (!customerData) {
       if (!customer.name) {
         return res
           .status(400)
@@ -36,6 +33,7 @@ exports.createSale = async (req, res) => {
 
     for (let p of products) {
       const product = await Store.findById(p.product_id);
+
       if (!product || product.quantity < p.quantity) {
         return res.status(400).json({
           message: `${
@@ -75,6 +73,7 @@ exports.createSale = async (req, res) => {
 
     const todayStart = new Date(year, today.getMonth(), today.getDate());
     const todayEnd = new Date(year, today.getMonth(), today.getDate() + 1);
+
     const todayCount = await Sale.countDocuments({
       createdAt: { $gte: todayStart, $lt: todayEnd },
     });
@@ -108,16 +107,10 @@ exports.createSale = async (req, res) => {
 
     res.json({ success: true, sale, customer: customerData });
   } catch (err) {
-    console.log(err);
-
+    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
-
-
-
-
-
 // 📄 Barcha sotuvlarni olish
 exports.getAllSales = async (req, res) => {
   try {
@@ -317,7 +310,7 @@ exports.getSalesStats = async (req, res) => {
 
     const sales = await Sale.find(dateFilter).populate({
       path: "products.product_id",
-      select: "purchase_price unit", // 🔹 Asosiy tan narxini olamiz
+      select: "purchase_price unit",
     });
 
     let stats = {
@@ -334,13 +327,19 @@ exports.getSalesStats = async (req, res) => {
       stats.total_sales_count++;
       stats.total_revenue += sale.total_amount || 0;
 
-      // 💰 To‘lov turi bo‘yicha ajratish
-      stats[`${sale.payment_method}_total`] += sale.total_amount || 0;
+      if (sale.payment_method === "naxt") {
+        stats.cash_total += sale.total_amount || 0;
+      } else if (sale.payment_method === "karta") {
+        stats.card_total += sale.total_amount || 0;
+      } else if (sale.payment_method === "qarz") {
+        stats.debt_total += sale.remaining_debt || 0; // ❗ faqat qarz qismini qo‘shamiz
+        stats.cash_total += sale.paid_amount || 0; // ❗ qarz bo‘lsa ham to‘langan qismi naxtga qo‘shilsin
+      }
 
       sale.products.forEach((p) => {
         const product = p.product_id || {};
-        const purchasePrice = product.purchase_price || 0; // 🔹 Tan narx
-        const sellPrice = p.price || 0; // Sotish narxi
+        const purchasePrice = product.purchase_price || 0;
+        const sellPrice = p.price || 0;
         const quantity = p.quantity || 0;
 
         const revenue = sellPrice * quantity;
