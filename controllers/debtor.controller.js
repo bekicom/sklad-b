@@ -135,3 +135,42 @@ exports.getClientPayments = async (req, res) => {
 
 
 
+// 💰 Mijoz qarz to'lashi (tarix bilan)
+exports.payCustomerDebt = async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const sale = await Sale.findById(req.params.id).populate("customer_id");
+
+    if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
+
+    // 1️⃣ paymentHistory maydoni mavjud bo‘lmasa, yaratamiz
+    if (!Array.isArray(sale.paymentHistory)) {
+      sale.paymentHistory = [];
+    }
+
+    // 2️⃣ Yangi to‘lovni tarixga qo‘shamiz
+    sale.paymentHistory.push({
+      amount,
+      date: new Date()
+    });
+
+    // 3️⃣ Umumiy to‘langan summani yangilaymiz
+    sale.paid_amount += amount;
+    await sale.save();
+
+    // 4️⃣ Mijozning umumiy qarz ma’lumotlarini yangilaymiz
+    const customer = sale.customer_id;
+    customer.total_paid += amount;
+    customer.total_debt = customer.total_given - customer.total_paid;
+    await customer.save();
+
+    res.json({
+      success: true,
+      message: "To‘lov qabul qilindi",
+      sale,
+      customer
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

@@ -51,12 +51,17 @@ exports.createCustomerSale = async (req, res) => {
       total_amount += (p.price || product.sell_price) * p.quantity;
     }
 
+    const remaining_debt = total_amount - paid_amount;
+
     const sale = await Sale.create({
       customer_id: customerData._id,
       products: saleProducts,
       total_amount,
       paid_amount,
+      remaining_debt,
       payment_method,
+      paymentHistory:
+        paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
     });
 
     customerData.total_given += total_amount;
@@ -71,6 +76,7 @@ exports.createCustomerSale = async (req, res) => {
   }
 };
 
+// 📄 Barcha mijozlar
 exports.getAllCustomers = async (req, res) => {
   try {
     const customers = await Customer.find();
@@ -111,19 +117,36 @@ exports.getCustomerDebtors = async (req, res) => {
 exports.payCustomerDebt = async (req, res) => {
   try {
     const { amount } = req.body;
-    const sale = await Sale.findById(req.params.id).populate("customer_id");
+    const customer = await Customer.findById(req.params.id);
 
-    if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
+    if (!customer) return res.status(404).json({ message: "Mijoz topilmadi" });
 
-    sale.paid_amount += amount;
-    await sale.save();
+    const lastDebtSale = await Sale.findOne({
+      customer_id: customer._id,
+      payment_method: "qarz",
+      $expr: { $lt: ["$paid_amount", "$total_amount"] },
+    }).sort({ createdAt: 1 });
 
-    const customer = sale.customer_id;
+    if (!lastDebtSale) {
+      return res.status(400).json({ message: "Qarz sotuv topilmadi" });
+    }
+
+    lastDebtSale.paid_amount += amount;
+    lastDebtSale.remaining_debt =
+      lastDebtSale.total_amount - lastDebtSale.paid_amount;
+
+    lastDebtSale.payment_history.push({
+      amount,
+      date: new Date(),
+    });
+
+    await lastDebtSale.save();
+
     customer.total_paid += amount;
     customer.total_debt = customer.total_given - customer.total_paid;
     await customer.save();
 
-    res.json({ success: true, sale, customer });
+    res.json({ success: true, sale: lastDebtSale, customer });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
