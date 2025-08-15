@@ -7,9 +7,7 @@ const Client = require("../models/Client");
 // 🛒 Sotuv yaratish (mavjud kod + faktura raqami)
 exports.createSale = async (req, res) => {
   try {
-    let { customer, products, paid_amount, payment_method, shop_info } =
-      req.body;
-
+    let { customer, products, paid_amount, shop_info } = req.body;
     paid_amount = Number(paid_amount) || 0;
 
     // 1️⃣ Mijozni topish yoki yaratish
@@ -37,7 +35,6 @@ exports.createSale = async (req, res) => {
 
     for (let p of products) {
       const product = await Store.findById(p.product_id);
-
       if (!product || product.quantity < p.quantity) {
         return res.status(400).json({
           message: `${
@@ -48,9 +45,11 @@ exports.createSale = async (req, res) => {
 
       const purchase_price = product.unit_price || 0;
 
+      // Ombordan kamaytirish
       product.quantity -= p.quantity;
       await product.save();
 
+      // Sotuv uchun mahsulot ma’lumotlari
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
@@ -66,17 +65,9 @@ exports.createSale = async (req, res) => {
       total_amount += (p.price || product.sell_price) * p.quantity;
     }
 
-    // 3️⃣ Qolgan qarz summasini hisoblash
+    // 3️⃣ Qolgan qarz summasi va to‘lov turi
     const remaining_debt = total_amount - paid_amount;
-
-    // Payment method avtomatik aniqlash
-    if (!payment_method) {
-      if (remaining_debt > 0) {
-        payment_method = "qarz";
-      } else {
-        payment_method = "naxt";
-      }
-    }
+    let payment_method = remaining_debt > 0 ? "qarz" : "cash"; // ✅ enum mos
 
     // 4️⃣ Faktura raqami
     const today = new Date();
@@ -117,21 +108,39 @@ exports.createSale = async (req, res) => {
     customerData.totalDebt =
       customerData.totalPurchased - customerData.totalPaid;
 
-    // Agar qarz bo'lsa - paymentHistory ga yozamiz
-    if (remaining_debt > 0) {
-      if (!Array.isArray(customerData.paymentHistory)) {
-        customerData.paymentHistory = [];
-      }
-      if (paid_amount > 0) {
-        customerData.paymentHistory.push({
-          amount: paid_amount,
-          date: new Date(),
-          note: "Qarz to'lovi (sotuv vaqtida)",
-        });
-      }
+    // ✅ paymentHistory maydoni mavjudligini tekshirish
+    if (!Array.isArray(customerData.paymentHistory)) {
+      customerData.paymentHistory = [];
+    }
+
+    // Qarz bo‘lsa va sotuv vaqtida qisman to‘lov bo‘lsa
+    if (remaining_debt > 0 && paid_amount > 0) {
+      customerData.paymentHistory.push({
+        amount: paid_amount,
+        date: new Date(),
+        note: "Qarz to'lovi (sotuv vaqtida)",
+      });
     }
 
     await customerData.save();
+
+    // 7️⃣ Agar qarz bo‘lsa Debtor kolleksiyasiga yozish
+    if (remaining_debt > 0) {
+      await Debtor.create({
+        customer_id: customerData._id,
+        products: saleProducts.map((p) => ({
+          product_id: p.product_id,
+          name: p.name,
+          quantity: p.quantity,
+          price: p.price,
+        })),
+        totalAmount: total_amount,
+        paidAmount: paid_amount,
+        remainingAmount: remaining_debt,
+        paymentHistory:
+          paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
+      });
+    }
 
     res.json({ success: true, sale, customer: customerData });
   } catch (err) {
