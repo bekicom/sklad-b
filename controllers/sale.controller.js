@@ -7,7 +7,8 @@ const Client = require("../models/Client");
 // 🛒 Sotuv yaratish (mavjud kod + faktura raqami)
 exports.createSale = async (req, res) => {
   try {
-    let { customer, products, paid_amount, shop_info } = req.body;
+    let { customer, products, paid_amount, payment_method, shop_info } =
+      req.body;
     paid_amount = Number(paid_amount) || 0;
 
     // 1️⃣ Mijozni topish yoki yaratish
@@ -49,7 +50,6 @@ exports.createSale = async (req, res) => {
       product.quantity -= p.quantity;
       await product.save();
 
-      // Sotuv uchun mahsulot ma’lumotlari
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
@@ -67,7 +67,12 @@ exports.createSale = async (req, res) => {
 
     // 3️⃣ Qolgan qarz summasi va to‘lov turi
     const remaining_debt = total_amount - paid_amount;
-    let payment_method = remaining_debt > 0 ? "qarz" : "cash"; // ✅ enum mos
+
+    // Agar frontenddan payment_method yuborilgan bo‘lsa, ishlatamiz, aks holda qarz/cash belgilaymiz
+    const validMethods = ["cash", "card", "qarz"];
+    if (!payment_method || !validMethods.includes(payment_method)) {
+      payment_method = remaining_debt > 0 ? "qarz" : "cash";
+    }
 
     // 4️⃣ Faktura raqami
     const today = new Date();
@@ -108,12 +113,10 @@ exports.createSale = async (req, res) => {
     customerData.totalDebt =
       customerData.totalPurchased - customerData.totalPaid;
 
-    // ✅ paymentHistory maydoni mavjudligini tekshirish
     if (!Array.isArray(customerData.paymentHistory)) {
       customerData.paymentHistory = [];
     }
 
-    // Qarz bo‘lsa va sotuv vaqtida qisman to‘lov bo‘lsa
     if (remaining_debt > 0 && paid_amount > 0) {
       customerData.paymentHistory.push({
         amount: paid_amount,
@@ -124,7 +127,7 @@ exports.createSale = async (req, res) => {
 
     await customerData.save();
 
-    // 7️⃣ Agar qarz bo‘lsa Debtor kolleksiyasiga yozish
+    // 7️⃣ Debtor yozuvi
     if (remaining_debt > 0) {
       await Debtor.create({
         customer_id: customerData._id,
@@ -341,6 +344,7 @@ exports.getSalesStats = async (req, res) => {
     const { from, to } = req.query;
     const dateFilter = {};
 
+    // Sanaga filter qo‘shish
     if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
       dateFilter.createdAt = {
         $gte: new Date(from),
@@ -348,16 +352,15 @@ exports.getSalesStats = async (req, res) => {
       };
     }
 
-    // 📌 Sotuvlar
-    const sales = await Sale.find(dateFilter).populate({
-      path: "products.product_id",
-      select: "purchase_price unit",
-    });
+    // Sotuvlar
+    const sales = await Sale.find(dateFilter)
+      .populate({
+        path: "products.product_id",
+        select: "purchase_price unit",
+      })
+      .populate("customer_id");
 
-    // 📌 Mijozlardan qarz to‘lovlari (Customer.paymentHistory)
-    const customers = await Customer.find().select("payment_history");
-
-    // 📌 Yetkazib beruvchilardan qarz to‘lovlari (Client.paymentHistory)
+    // Yetkazib beruvchilar va to‘lovlari
     const clients = await Client.find().select("paymentHistory");
 
     let stats = {
@@ -368,24 +371,42 @@ exports.getSalesStats = async (req, res) => {
       card_total: 0,
       debt_total: 0,
       product_details: {},
-      store_debt_received: 0, // 🆕 Do‘kondan kelgan qarz to‘lovlari
-      supplier_payments_total: 0, // 🆕 Yetkazib beruvchiga to‘langan pullar
+      store_debt_received: 0, // Do‘kondan kelgan qarz to‘lovlari
+      supplier_payments_total: 0, // Yetkazib beruvchiga to‘langan pullar
     };
 
-    // 🔹 Sotuvlardan umumiy statistika
     sales.forEach((sale) => {
       stats.total_sales_count++;
       stats.total_revenue += sale.total_amount || 0;
 
-      if (sale.payment_method === "naxt") {
-        stats.cash_total += sale.total_amount || 0;
-      } else if (sale.payment_method === "karta") {
-        stats.card_total += sale.total_amount || 0;
-      } else if (sale.payment_method === "qarz") {
-        stats.debt_total += sale.remaining_debt || 0;
-        stats.cash_total += sale.paid_amount || 0;
+      // To‘lov turini ajratish
+      switch (sale.payment_method) {
+        case "cash":
+          stats.cash_total += sale.total_amount || 0;
+          break;
+
+        case "card":
+          stats.card_total += sale.total_amount || 0;
+          break;
+
+        case "debt":
+        case "qarz": // qarzga sotuvlarni ham hisoblaymiz
+          const remainingDebt =
+            typeof sale.remaining_debt === "number"
+              ? sale.remaining_debt
+              : (sale.total_amount || 0) - (sale.paid_amount || 0);
+
+          stats.debt_total += remainingDebt;
+          stats.cash_total += sale.paid_amount || 0; // qisman to‘lov
+          break;
+
+        default:
+          // boshqa tur bo‘lsa, faqat total_amount ni cash ga qo‘shish
+          stats.cash_total += sale.total_amount || 0;
+          break;
       }
 
+      // Mahsulot bo‘yicha daromad va foyda
       sale.products.forEach((p) => {
         const product = p.product_id || {};
         const purchasePrice = product.purchase_price || 0;
@@ -403,7 +424,7 @@ exports.getSalesStats = async (req, res) => {
             revenue: 0,
             cost: 0,
             profit: 0,
-            unit: p.unit,
+            unit: p.unit || product.unit || "dona",
           };
         }
 
@@ -411,16 +432,16 @@ exports.getSalesStats = async (req, res) => {
         stats.product_details[p.name].cost += cost;
         stats.product_details[p.name].profit += profit;
       });
-    });
 
-    // 🔹 Do‘kondan qarz to‘lovlari
-    customers.forEach((cust) => {
-      (cust.payment_history || []).forEach((p) => {
-        stats.store_debt_received += p.amount || 0;
+      // Do‘kondan kelgan qarz to‘lovlarini qo‘shish
+      (sale.payment_history || []).forEach((ph) => {
+        if (ph.amount && ph.amount > 0) {
+          stats.store_debt_received += ph.amount;
+        }
       });
     });
 
-    // 🔹 Yetkazib beruvchiga qarz to‘lovlari
+    // Yetkazib beruvchiga to‘lovlar
     clients.forEach((client) => {
       (client.paymentHistory || []).forEach((p) => {
         stats.supplier_payments_total += p.amount || 0;
@@ -429,15 +450,10 @@ exports.getSalesStats = async (req, res) => {
 
     stats.total_profit = Number(stats.total_profit.toFixed(2));
 
-    res.json({
-      success: true,
-      stats,
-    });
+    res.json({ success: true, stats });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    console.error("❌ getSalesStats error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 

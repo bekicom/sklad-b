@@ -28,7 +28,7 @@ const saleSchema = new mongoose.Schema(
     remaining_debt: { type: Number, default: 0, min: 0 },
     payment_method: {
       type: String,
-      enum: ["cash", "card", "qarz", "mixed"],
+      enum: ["c ash", "card", "qarz","mixed"],
       default: "cash",
     },
 

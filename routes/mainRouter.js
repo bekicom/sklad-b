@@ -1,23 +1,23 @@
 const express = require("express");
 const router = express.Router();
 
-// ✅ Controllerlar
+// ===================== CONTROLLERS =====================
 const userController = require("../controllers/user.controller");
-const clientController = require("../controllers/client.controller"); // 🚚 Yetkazib beruvchi
-const customerSaleController = require("../controllers/customerSaleController"); // 🛒 Do'konga mijoz sotuvlari
+const clientController = require("../controllers/client.controller");
+const customerSaleController = require("../controllers/customerSaleController");
 const importController = require("../controllers/import.controller");
 const storeController = require("../controllers/store.controller");
-const saleController = require("../controllers/sale.controller"); // Ombor sotuvlari
+const saleController = require("../controllers/sale.controller");
 const debtorController = require("../controllers/debtor.controller");
 
-// ✅ Middleware
+// ===================== MIDDLEWARE =====================
 const au = require("../middlewares/auth.middleware");
 
-/* ====================== 🔐 USER AUTH ROUTES ====================== */
+// ===================== USER AUTH =====================
 router.post("/register", userController.registerUser);
 router.post("/login", userController.loginUser);
 
-/* ====================== 👥 CLIENT (YETKAZIB BERUVCHI) ROUTES ====================== */
+// ===================== CLIENT ROUTES =====================
 router.post("/clients", au.verifyToken, clientController.createClient);
 router.get("/clients", au.verifyToken, clientController.getClients);
 router.get("/clients/:id", au.verifyToken, clientController.getClientById);
@@ -29,42 +29,52 @@ router.get(
   au.verifyToken,
   clientController.getClientPayments
 );
-// 📊 Client statistikasi
 router.get(
   "/clients/:id/stats",
   au.verifyToken,
   clientController.getClientStats
 );
 
-/* ====================== 🛒 CUSTOMER (DO'KON MIJOZLARI) ROUTES ====================== */
+// ===================== CUSTOMER SALES =====================
 router.post(
   "/customers/sales",
   au.verifyToken,
   customerSaleController.createCustomerSale
-); // Yangi sotuv
+);
 router.get(
   "/customers/sales",
   au.verifyToken,
   customerSaleController.getAllCustomerSales
-); // Barcha sotuvlar
+);
 router.get(
   "/customers/all",
   au.verifyToken,
   customerSaleController.getAllCustomers
-); // Barcha sotuvlar
+);
 router.get(
   "/customers/debtors",
   au.verifyToken,
   customerSaleController.getCustomerDebtors
-); // Qarzdagi mijozlar
+);
 router.put(
   "/customers/pay-debt/:id",
   au.verifyToken,
   customerSaleController.payCustomerDebt
-); // Qarz to'lash
+);
 
-/* ====================== 📦 IMPORT ROUTES ====================== */
-// ❗ Aniq route'lar oldinda
+// ===================== EXPENSES =====================
+const expenseController = require("../controllers/expense.controller");
+
+router.post("/expenses", au.verifyToken, expenseController.createExpense);
+router.get("/expenses", au.verifyToken, expenseController.getAllExpenses);
+router.get("/expenses/:id", au.verifyToken, expenseController.getExpenseById);
+router.put("/expenses/:id", au.verifyToken, expenseController.updateExpense);
+router.delete("/expenses/:id", au.verifyToken, expenseController.deleteExpense);
+
+
+
+
+// ===================== IMPORTS =====================
 router.get(
   "/imports/last-partiya",
   au.verifyToken,
@@ -74,23 +84,23 @@ router.post("/imports", au.verifyToken, importController.createImport);
 router.get("/imports", au.verifyToken, importController.getAllImports);
 router.get("/imports/:id", au.verifyToken, importController.getImportById);
 
-/* ====================== 🏪 STORE ROUTES ====================== */
-router.get("/store/all", au.verifyToken, storeController.getAllStoreProducts); // Aniq route
+// ===================== STORE =====================
+router.get("/store/all", au.verifyToken, storeController.getAllStoreProducts);
 router.get("/store", au.verifyToken, storeController.getAllStoreItems);
 router.get("/store/:importId", au.verifyToken, storeController.gSImportId);
 router.put("/store/:id", au.verifyToken, storeController.updateStoreItem);
 router.delete("/store/:id", au.verifyToken, storeController.deleteStoreItem);
 router.get("/grouped", au.verifyToken, storeController.getGroupedStoreItems);
 
-/* ====================== 🏷️ SALES ROUTES (Ombor sotuvlari) ====================== */
+// ===================== SALES =====================
 router.post("/sales", au.verifyToken, saleController.createSale);
 router.get("/sales", au.verifyToken, saleController.getAllSales);
 router.get("/sales/debtors", au.verifyToken, saleController.getDebtors);
 router.put("/sales/pay/:id", au.verifyToken, saleController.payDebt);
-router.get("/sales/:id/invoice", au.verifyToken, saleController.getInvoiceData); // yangilangan funksiya nomi
+router.get("/sales/:id/invoice", au.verifyToken, saleController.getInvoiceData);
 router.get("/sales/stats", au.verifyToken, saleController.getSalesStats);
 
-/* ====================== 🧾 DEBTOR ROUTES ====================== */
+// ===================== DEBTORS =====================
 router.post("/debtors", au.verifyToken, debtorController.createDebtor);
 router.get("/debtors", au.verifyToken, debtorController.getDebtors);
 router.put(
@@ -99,8 +109,6 @@ router.put(
   debtorController.updateDebtorPayment
 );
 router.delete("/debtors/:id", au.verifyToken, debtorController.deleteDebtor);
-
-// ❗ PATCH route nomi aniq bo'lishi kerak, qaysi modulga tegishli ekanligini bildir
 router.patch("/debtors/pay/:id", au.verifyToken, debtorController.payDebt);
 
 module.exports = router;
