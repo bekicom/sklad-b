@@ -1,9 +1,38 @@
 const mongoose = require("mongoose");
 
-const expenseSchema = new mongoose.Schema({
-  amount: { type: Number, required: true },
-  reason: { type: String, required: false },
-  date: { type: Date, default: Date.now },
-});
+const dailyExpenseSchema = new mongoose.Schema(
+  {
+    date: {
+      type: Date,
+      default: Date.now,
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    note: {
+      type: String,
+      trim: true,
+    },
+  },
+  { _id: false }
+);
 
-module.exports = mongoose.model("Expense", expenseSchema);
+const expenseCategorySchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    expenses: {
+      type: [dailyExpenseSchema],
+      default: [],
+    },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("ExpenseCategory", expenseCategorySchema);

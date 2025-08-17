@@ -9,6 +9,7 @@ const importController = require("../controllers/import.controller");
 const storeController = require("../controllers/store.controller");
 const saleController = require("../controllers/sale.controller");
 const debtorController = require("../controllers/debtor.controller");
+const expenseController = require("../controllers/expense.controller");
 
 // ===================== MIDDLEWARE =====================
 const au = require("../middlewares/auth.middleware");
@@ -63,16 +64,24 @@ router.put(
 );
 
 // ===================== EXPENSES =====================
-const expenseController = require("../controllers/expense.controller");
+// 1) Kategoriya CRUD
+router.get(
+  "/expenses/categories",
+  au.verifyToken,
+  expenseController.getAllCategories
+);
+router.post(
+  "/expenses/categories", // ← shu joyda "categories"
+  au.verifyToken,
+  expenseController.createCategory
+);
 
+// 3) Agar eski umumiy expenses CRUD kerak bo‘lsa
 router.post("/expenses", au.verifyToken, expenseController.createExpense);
 router.get("/expenses", au.verifyToken, expenseController.getAllExpenses);
 router.get("/expenses/:id", au.verifyToken, expenseController.getExpenseById);
 router.put("/expenses/:id", au.verifyToken, expenseController.updateExpense);
 router.delete("/expenses/:id", au.verifyToken, expenseController.deleteExpense);
-
-
-
 
 // ===================== IMPORTS =====================
 router.get(

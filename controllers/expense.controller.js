@@ -1,74 +1,148 @@
-const Expense = require("../models/Expense");
+const ExpenseCategory = require("../models/Expense");
+
+// ===================== CATEGORY CRUD =====================
+
+// Barcha kategoriyalarni olish
+exports.getAllCategories = async (req, res) => {
+  try {
+    const categories = await ExpenseCategory.find();
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Kategoriya yaratish
+exports.createCategory = async (req, res) => {
+  try {
+    const category = new ExpenseCategory({ name: req.body.name });
+    await category.save();
+    res.status(201).json(category);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Kategoriya ichiga xarajat qo‘shish
+exports.addExpense = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const { amount, note } = req.body;
+
+    const category = await ExpenseCategory.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({ message: "Kategoriya topilmadi" });
+    }
+
+    category.expenses.push({ amount, note });
+    await category.save();
+
+    res.status(201).json(category);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ===================== OLD-STYLE EXPENSE CRUD =====================
 
 // Barcha xarajatlarni olish
 exports.getAllExpenses = async (req, res) => {
   try {
-    const expenses = await Expense.find().sort({ date: -1 });
-    res.json({ success: true, expenses });
+    const categories = await ExpenseCategory.find();
+    const expenses = categories.flatMap((cat) =>
+      cat.expenses.map((exp) => ({
+        ...exp.toObject(),
+        category: cat.name,
+      }))
+    );
+    res.json(expenses);
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ error: err.message });
   }
 };
 
-// Bitta xarajatni ID bo‘yicha olish
+// ID orqali bitta xarajatni olish
 exports.getExpenseById = async (req, res) => {
   try {
-    const expense = await Expense.findById(req.params.id);
-    if (!expense)
-      return res
-        .status(404)
-        .json({ success: false, message: "Expense not found" });
-    res.json({ success: true, expense });
+    const { id } = req.params;
+    const category = await ExpenseCategory.findOne({
+      "expenses._id": id,
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: "Xarajat topilmadi" });
+    }
+
+    const expense = category.expenses.id(id);
+    res.json({ ...expense.toObject(), category: category.name });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ error: err.message });
   }
 };
 
-// Yangi xarajat qo'shish
+// Xarajat yaratish (kategoriya ko‘rsatib)
 exports.createExpense = async (req, res) => {
   try {
-    const { amount, reason } = req.body;
-    if (!reason || !amount) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Reason and amount are required" });
+    const { categoryId, amount, note } = req.body;
+
+    const category = await ExpenseCategory.findById(categoryId);
+    if (!category) {
+      return res.status(404).json({ message: "Kategoriya topilmadi" });
     }
-    const expense = await Expense.create({ amount, reason });
-    res.json({ success: true, expense });
+
+    category.expenses.push({ amount, note });
+    await category.save();
+
+    res.status(201).json(category);
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ error: err.message });
   }
 };
 
 // Xarajatni yangilash
 exports.updateExpense = async (req, res) => {
   try {
-    const { amount, reason } = req.body;
-    const expense = await Expense.findByIdAndUpdate(
-      req.params.id,
-      { amount, reason },
-      { new: true }
-    );
-    if (!expense)
-      return res
-        .status(404)
-        .json({ success: false, message: "Expense not found" });
-    res.json({ success: true, expense });
+    const { id } = req.params;
+    const { amount, note } = req.body;
+
+    const category = await ExpenseCategory.findOne({
+      "expenses._id": id,
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: "Xarajat topilmadi" });
+    }
+
+    const expense = category.expenses.id(id);
+    if (amount !== undefined) expense.amount = amount;
+    if (note !== undefined) expense.note = note;
+
+    await category.save();
+
+    res.json(expense);
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ error: err.message });
   }
 };
 
 // Xarajatni o‘chirish
 exports.deleteExpense = async (req, res) => {
   try {
-    const expense = await Expense.findByIdAndDelete(req.params.id);
-    if (!expense)
-      return res
-        .status(404)
-        .json({ success: false, message: "Expense not found" });
-    res.json({ success: true, message: "Expense deleted successfully" });
+    const { id } = req.params;
+
+    const category = await ExpenseCategory.findOne({
+      "expenses._id": id,
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: "Xarajat topilmadi" });
+    }
+
+    category.expenses.id(id).remove();
+    await category.save();
+
+    res.json({ message: "Xarajat o‘chirildi" });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ error: err.message });
   }
 };
