@@ -1,31 +1,29 @@
 // models/Import.js
 const mongoose = require("mongoose");
 
-// ✅ TUZATILDI: Har bir mahsulot uchun schema (Store modeliga moslashtirilgan)
+// 🔹 Har bir mahsulot uchun schema (Store modeliga moslashtirilgan)
 const productSchema = new mongoose.Schema(
   {
-    product_name: { type: String, required: true, trim: true }, // ✅ TUZATILDI: product_name ishlatiladi
-    model: { type: String, trim: true },
+    product_name: { type: String, required: true, trim: true }, // Mahsulot nomi
+    model: { type: String, trim: true }, // Model
     unit: { type: String, enum: ["kg", "dona", "litr"], required: true }, // O'lchov
     quantity: { type: Number, required: true, min: 0 }, // Miqdor
-
-    unit_price: { type: Number, required: true, min: 0 }, // ✅ TUZATILDI: unit_price qo'shildi
+    unit_price: { type: Number, required: true, min: 0 }, // Xarid narxi (1 dona/kg)
     sell_price: { type: Number, required: true, min: 0 }, // Sotish narxi (1 dona/kg)
-
     total_price: { type: Number, required: true, min: 0 }, // Jami kelish narxi
-    currency: { type: String, enum: ["UZS", "USD"], required: true }, // Valyuta turi
+    currency: { type: String, enum: ["UZS", "USD"], required: true }, // Valyuta
   },
   { _id: false }
 );
 
-// Import kirimi uchun schema
+// 🔹 Import kirimi uchun schema
 const importSchema = new mongoose.Schema(
   {
     supplier_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Client",
+      ref: "Client", // Yetkazib beruvchi Client modelida saqlanadi
       required: true,
-    }, // ✅ TUZATILDI: supplier_id ishlatiladi (client emas)
+    },
 
     products: {
       type: [productSchema],
@@ -35,19 +33,20 @@ const importSchema = new mongoose.Schema(
       },
     },
 
-    usd_to_uzs_rate: { type: Number, required: true, min: 0 }, // Kurs
+    usd_to_uzs_rate: { type: Number, required: true, min: 0 }, // USD kursi
 
     total_amount_uzs: { type: Number, default: 0, min: 0 }, // Jami summa (UZS)
-    paid_amount: { type: Number, default: 0, min: 0 }, // To'langan
-    remaining_debt: { type: Number, default: 0, min: 0 }, // Qarz
+    paid_amount: { type: Number, default: 0, min: 0 }, // To‘langan summa
+    remaining_debt: { type: Number, default: 0, min: 0 }, // Qolgan qarz
 
     partiya_number: { type: Number, required: true, min: 1 }, // Partiya raqami
+    delivery_date: { type: Date, default: Date.now }, // Mahsulot kelgan sana
     note: { type: String, trim: true },
   },
   { timestamps: true }
 );
 
-// Avtomatik umumiy summa va qarz hisoblash
+// 🔹 Avtomatik umumiy summa va qolgan qarzni hisoblash
 importSchema.pre("save", function (next) {
   // Umumiy summa (UZS)
   this.total_amount_uzs = this.products.reduce((sum, p) => {
@@ -57,7 +56,7 @@ importSchema.pre("save", function (next) {
     return sum + p.total_price;
   }, 0);
 
-  // Qolgan qarzni hisoblash
+  // Qolgan qarz
   this.remaining_debt = Number(
     (this.total_amount_uzs - (this.paid_amount || 0)).toFixed(2)
   );

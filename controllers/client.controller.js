@@ -5,8 +5,8 @@ const Import = require("../models/Import");
 exports.createClient = async (req, res) => {
   try {
     const { name, phone, address } = req.body;
-    const existing = await Client.findOne({ phone });
 
+    const existing = await Client.findOne({ phone });
     if (existing) {
       return res.status(200).json(existing);
     }
@@ -37,9 +37,7 @@ exports.getClients = async (req, res) => {
 exports.getClientById = async (req, res) => {
   try {
     const client = await Client.findById(req.params.id);
-    if (!client) {
-      return res.status(404).json({ message: "Client topilmadi" });
-    }
+    if (!client) return res.status(404).json({ message: "Client topilmadi" });
     res.status(200).json(client);
   } catch (err) {
     res
@@ -78,31 +76,27 @@ exports.deleteClient = async (req, res) => {
 exports.payDebt = async (req, res) => {
   try {
     const { amount, note } = req.body;
+    console.log(req.body);
+
     const client = await Client.findById(req.params.clientId);
 
-    if (!client) {
-      return res.status(404).json({ message: "Client topilmadi" });
-    }
-
-    if (!amount || amount <= 0) {
+    if (!client) return res.status(404).json({ message: "Client topilmadi" });
+    if (!amount || amount <= 0)
       return res.status(400).json({ message: "To'lov summasi noto'g'ri" });
-    }
-
-    if (amount > client.totalDebt) {
+    if (amount > client.totalDebt)
       return res
         .status(400)
         .json({ message: "To'lov summasi qarzdan ko'p bo'lishi mumkin emas" });
-    }
 
-    // 📌 To'lov tarixiga qo'shish
+    // To'lov tarixiga qo‘shish
     client.paymentHistory.push({
       amount,
       date: new Date(),
       note: note || "Qarz to'lovi",
     });
 
-    // 📌 Umumiy to‘langan summa va qolgan qarzni hisoblash
-    client.totalPaid = (client.totalPaid || 0) + amount;
+    // Umumiy to‘langan summa va qolgan qarz
+    client.totalPaid += amount;
     client.totalDebt -= amount;
     if (client.totalDebt < 0) client.totalDebt = 0;
 
@@ -125,23 +119,21 @@ exports.payDebt = async (req, res) => {
   }
 };
 
-// 📊 Yetkazib beruvchi (Client) statistikasi
+// 📊 Client statistikasi
 exports.getClientStats = async (req, res) => {
   try {
     const clientId = req.params.id;
     const client = await Client.findById(clientId);
-    if (!client) {
-      return res.status(404).json({ message: "Client topilmadi" });
-    }
+    if (!client) return res.status(404).json({ message: "Client topilmadi" });
 
-    const imports = await Import.find({ client: clientId });
+    const imports = await Import.find({ supplier_id: clientId });
 
     const totalPartiya = imports.length;
-
     let totalAmountUZS = 0;
+
     imports.forEach((imp) => {
       imp.products.forEach((p) => {
-        let priceUZS =
+        const priceUZS =
           p.currency === "USD"
             ? p.total_price * (imp.usd_to_uzs_rate || 0)
             : p.total_price;
@@ -168,18 +160,51 @@ exports.getClientStats = async (req, res) => {
   }
 };
 
-// 📜 To'lov tarixini olish
+// 📜 To'lov tarixi
 exports.getClientPayments = async (req, res) => {
   try {
     const { id } = req.params;
     const client = await Client.findById(id).select(
       "paymentHistory name phone"
     );
+    if (!client) return res.status(404).json({ message: "Client topilmadi" });
+
+    res.json(client.paymentHistory || []);
+  } catch (err) {
+    res.status(500).json({ message: "Server xatosi", error: err.message });
+  }
+};
+
+// 📦 Client import/mahsulot tarixi
+exports.getClientImportsHistory = async (req, res) => {
+  try {
+    const clientId = req.params.id;
+
+    const client = await Client.findById(clientId);
     if (!client) {
       return res.status(404).json({ message: "Client topilmadi" });
     }
-    res.json(client.paymentHistory || []);
-  } catch (error) {
-    res.status(500).json({ message: "Server xatosi", error: error.message });
+
+    // Client importlarini olish
+    const imports = await Import.find({ supplier_id: clientId }).sort({
+      createdAt: -1,
+    });
+
+    res.status(200).json(imports);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server xatosi", error: err.message });
+  }
+};
+
+exports.addDebt = async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const { amount } = req.body;
+    await Client.findByIdAndUpdate(clientId, { $inc: { totalDebt: amount } });
+    res.status(200).json({ message: "Qarz qo'shildi" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server xatosi", error: err.message });
   }
 };

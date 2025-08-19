@@ -151,3 +151,21 @@ exports.payCustomerDebt = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.addCustomerDebt = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+    console.log(id);
+    console.log(amount);
+
+    const customer = await Customer.findByIdAndUpdate(id, {
+      $inc: { totalDebt: amount },
+    });
+    console.log(customer);
+    
+    res.status(200).json({ message: "Qarz qo'shildi" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

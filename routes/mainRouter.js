@@ -19,12 +19,21 @@ router.post("/register", userController.registerUser);
 router.post("/login", userController.loginUser);
 
 // ===================== CLIENT ROUTES =====================
+router.get("/clienthistory/:id/", clientController.getClientImportsHistory);
+
 router.post("/clients", au.verifyToken, clientController.createClient);
 router.get("/clients", au.verifyToken, clientController.getClients);
 router.get("/clients/:id", au.verifyToken, clientController.getClientById);
 router.put("/clients/:id", au.verifyToken, clientController.updateClient);
 router.delete("/clients/:id", au.verifyToken, clientController.deleteClient);
+
+// 🔹 Client qarz to‘lash va tarix
 router.post("/clients/:clientId/pay", au.verifyToken, clientController.payDebt);
+router.post(
+  "/clients/:clientId/debt",
+  au.verifyToken,
+  clientController.addDebt
+);
 router.get(
   "/clients/:id/payments",
   au.verifyToken,
@@ -35,6 +44,8 @@ router.get(
   au.verifyToken,
   clientController.getClientStats
 );
+
+// 🔹 Client import/mahsulot tarixi
 
 // ===================== CUSTOMER SALES =====================
 router.post(
@@ -62,21 +73,23 @@ router.put(
   au.verifyToken,
   customerSaleController.payCustomerDebt
 );
+router.put(
+  "/customers/add-debt/:id",
+  au.verifyToken,
+  customerSaleController.addCustomerDebt
+);
 
 // ===================== EXPENSES =====================
-// 1) Kategoriya CRUD
 router.get(
   "/expenses/categories",
   au.verifyToken,
   expenseController.getAllCategories
 );
 router.post(
-  "/expenses/categories", // ← shu joyda "categories"
+  "/expenses/categories",
   au.verifyToken,
   expenseController.createCategory
 );
-
-// 3) Agar eski umumiy expenses CRUD kerak bo‘lsa
 router.post("/expenses", au.verifyToken, expenseController.createExpense);
 router.get("/expenses", au.verifyToken, expenseController.getAllExpenses);
 router.get("/expenses/:id", au.verifyToken, expenseController.getExpenseById);
