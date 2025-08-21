@@ -99,25 +99,7 @@ const getAllStoreProducts = async (req, res) => {
 /**
  * Ombordagi mahsulotni tahrirlash
  */
-const updateStoreItem = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updatedItem = await Store.findByIdAndUpdate(id, req.body, {
-      new: true,
-    });
 
-    if (!updatedItem) {
-      return res.status(404).json({ message: "Mahsulot topilmadi" });
-    }
-
-    res.status(200).json(updatedItem);
-  } catch (error) {
-    res.status(500).json({
-      message: "Mahsulotni yangilashda xatolik",
-      error: error.message,
-    });
-  }
-};
 
 /**
  * Ombordagi mahsulotni o'chirish
@@ -203,6 +185,61 @@ const gSImportId = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+const updateStoreItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validatsiya qo'shish
+    const allowedUpdates = [
+      "product_name",
+      "model",
+      "unit",
+      "quantity",
+      "purchase_price",
+      "sell_price",
+      "currency",
+      "partiya_number",
+      "paid_amount",
+      "remaining_debt",
+      "note",
+    ];
+
+    const updates = Object.keys(req.body);
+    const isValidOperation = updates.every((update) =>
+      allowedUpdates.includes(update)
+    );
+
+    if (!isValidOperation) {
+      return res.status(400).json({ message: "Noto'g'ri maydon!" });
+    }
+
+    // Agar narx o'zgarsa, total_price ni qayta hisoblash
+    if (req.body.quantity || req.body.purchase_price) {
+      const quantity = req.body.quantity;
+      const purchase_price = req.body.purchase_price;
+
+      if (quantity && purchase_price) {
+        req.body.total_price = quantity * purchase_price;
+      }
+    }
+
+    const updatedItem = await Store.findByIdAndUpdate(id, req.body, {
+      new: true,
+      runValidators: true,
+    }).populate("supplier_id", "name phone");
+
+    if (!updatedItem) {
+      return res.status(404).json({ message: "Mahsulot topilmadi" });
+    }
+
+    res.status(200).json(updatedItem);
+  } catch (error) {
+    res.status(500).json({
+      message: "Mahsulotni yangilashda xatolik",
+      error: error.message,
+    });
+  }
+};
 
 module.exports = {
   getAllStoreProducts,
@@ -212,4 +249,5 @@ module.exports = {
   updateStoreItem,
   deleteStoreItem,
   getGroupedStoreItems,
+ 
 };
