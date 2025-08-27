@@ -346,9 +346,15 @@ exports.getSalesStats = async (req, res) => {
 
     // Sanaga filter qo‘shish
     if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
+      const startDate = new Date(from);
+      startDate.setHours(0, 0, 0, 0); // kun boshi
+
+      const endDate = new Date(to);
+      endDate.setHours(23, 59, 59, 999); // kun oxiri
+
       dateFilter.createdAt = {
-        $gte: new Date(from),
-        $lte: new Date(to),
+        $gte: startDate,
+        $lte: endDate,
       };
     }
 
@@ -390,7 +396,7 @@ exports.getSalesStats = async (req, res) => {
           break;
 
         case "debt":
-        case "qarz": // qarzga sotuvlarni ham hisoblaymiz
+        case "qarz":
           const remainingDebt =
             typeof sale.remaining_debt === "number"
               ? sale.remaining_debt
@@ -401,12 +407,11 @@ exports.getSalesStats = async (req, res) => {
           break;
 
         default:
-          // boshqa tur bo‘lsa, faqat total_amount ni cash ga qo‘shish
           stats.cash_total += sale.total_amount || 0;
           break;
       }
 
-      // Mahsulot bo‘yicha daromad va foyda
+      // Mahsulot bo‘yicha hisob-kitob
       sale.products.forEach((p) => {
         const product = p.product_id || {};
         const purchasePrice = product.purchase_price || 0;
@@ -433,7 +438,7 @@ exports.getSalesStats = async (req, res) => {
         stats.product_details[p.name].profit += profit;
       });
 
-      // Do‘kondan kelgan qarz to‘lovlarini qo‘shish
+      // Do‘kondan kelgan qarz to‘lovlari
       (sale.payment_history || []).forEach((ph) => {
         if (ph.amount && ph.amount > 0) {
           stats.store_debt_received += ph.amount;
