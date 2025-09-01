@@ -11,12 +11,29 @@ const saleController = require("../controllers/sale.controller");
 const debtorController = require("../controllers/debtor.controller");
 const expenseController = require("../controllers/expense.controller");
 
+
+// 🔹 AGENT CONTROLLER (qo'shildi)
+const agentController = require("../controllers/agent.controller");
+
 // ===================== MIDDLEWARE =====================
 const au = require("../middlewares/auth.middleware");
 
 // ===================== USER AUTH =====================
 router.post("/register", userController.registerUser);
 router.post("/login", userController.loginUser);
+
+// ===================== AGENTS (yangi) =====================
+// Admin himoyasi uchun hozircha verifyToken qo'ydim.
+// Kerak bo'lsa keyin onlyAdmin qo'shib beramiz.
+router.post("/agents/login", agentController.loginAgent); // agent telefonidan login
+router.post("/agents", au.verifyToken, agentController.createAgent); // agent yaratish (ism, tel, login, parol)
+router.get("/agents", au.verifyToken, agentController.listAgents); // agentlar ro'yxati
+router.put("/agents/:id", au.verifyToken, agentController.updateAgent); // agent ma'lumotini yangilash (parolsiz)
+router.patch(
+  "/agents/:id/reset-password",
+  au.verifyToken,
+  agentController.resetAgentPassword
+); // parolni yangilash
 
 // ===================== CLIENT ROUTES =====================
 router.get("/clienthistory/:id/", clientController.getClientImportsHistory);
@@ -44,8 +61,6 @@ router.get(
   au.verifyToken,
   clientController.getClientStats
 );
-
-// 🔹 Client import/mahsulot tarixi
 
 // ===================== CUSTOMER SALES =====================
 router.post(

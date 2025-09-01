@@ -3,18 +3,15 @@ const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
+    name: { type: String, required: true },
+    login: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+
+    // 🔑 Qo‘shimcha: rol qo‘shish — default qilib "afitsant"
+    role: {
       type: String,
-      required: true,
-    },
-    login: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-    password: {
-      type: String,
-      required: true,
+      enum: ["admin", "afitsant", "kassir"],
+      default: "afitsant",
     },
   },
   { timestamps: true }
