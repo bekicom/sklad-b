@@ -114,6 +114,7 @@ exports.getCustomerDebtors = async (req, res) => {
 };
 
 // 💰 Mijoz qarz to'lashi
+// 💰 Mijoz qarz to'lashi
 exports.payCustomerDebt = async (req, res) => {
   try {
     const { amount } = req.body;
@@ -132,8 +133,10 @@ exports.payCustomerDebt = async (req, res) => {
     }
 
     lastDebtSale.paid_amount += amount;
-    lastDebtSale.remaining_debt =
-      lastDebtSale.total_amount - lastDebtSale.paid_amount;
+    lastDebtSale.remaining_debt = Math.max(
+      lastDebtSale.total_amount - lastDebtSale.paid_amount,
+      0
+    );
 
     lastDebtSale.payment_history.push({
       amount,
@@ -143,7 +146,10 @@ exports.payCustomerDebt = async (req, res) => {
     await lastDebtSale.save();
 
     customer.total_paid += amount;
-    customer.total_debt = customer.total_given - customer.total_paid;
+    customer.total_debt = Math.max(
+      customer.total_given - customer.total_paid,
+      0
+    );
     await customer.save();
 
     res.json({ success: true, sale: lastDebtSale, customer });
@@ -151,6 +157,7 @@ exports.payCustomerDebt = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 exports.addCustomerDebt = async (req, res) => {
   try {

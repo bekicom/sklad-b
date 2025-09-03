@@ -455,18 +455,24 @@ exports.getSalesStats = async (req, res) => {
 // ✅ Admin tomonidan sotuvni tasdiqlash va chek chiqarish
 exports.approveSale = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id).populate("products.product_id");
+    const sale = await Sale.findById(req.params.id).populate(
+      "products.product_id"
+    );
     if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
 
     if (sale.status !== "pending") {
-      return res.status(400).json({ message: "Bu sotuv allaqachon tasdiqlangan yoki yakunlangan" });
+      return res
+        .status(400)
+        .json({ message: "Bu sotuv allaqachon tasdiqlangan yoki yakunlangan" });
     }
 
     // Ombordan mahsulotlarni kamaytirish
     for (let p of sale.products) {
       const product = await Store.findById(p.product_id);
       if (!product || product.quantity < p.quantity) {
-        return res.status(400).json({ message: `Omborda ${p.name} yetarli emas` });
+        return res
+          .status(400)
+          .json({ message: `Omborda ${p.name} yetarli emas` });
       }
       product.quantity -= p.quantity;
       await product.save();
