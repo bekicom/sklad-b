@@ -17,6 +17,7 @@ exports.createSale = async (req, res) => {
     if (!customer || !customer.phone) {
       return res.status(400).json({ message: "customer.phone majburiy" });
     }
+
     let customerData = await Customer.findOne({ phone: customer.phone });
     if (!customerData) {
       if (!customer.name) {
@@ -31,7 +32,7 @@ exports.createSale = async (req, res) => {
       });
     }
 
-    // 2) Ombordan mahsulotlarni ayirish + summalar
+    // 2) Mahsulotlarni tekshirish va hisoblash
     if (!Array.isArray(products) || products.length === 0) {
       return res.status(400).json({ message: "Mahsulotlar bo'sh bo'lmasin" });
     }
@@ -71,7 +72,7 @@ exports.createSale = async (req, res) => {
       total_amount += sellPrice * qty;
     }
 
-    // 3) Qarzni hisoblash va to'lov turi
+    // 3) Qarzni hisoblash va to‘lov turi
     let remaining_debt = Math.max(total_amount - paid_amount, 0);
     if (!payment_method) {
       payment_method = remaining_debt > 0 ? "qarz" : "cash";
@@ -87,9 +88,11 @@ exports.createSale = async (req, res) => {
     const dd = String(now.getDate()).padStart(2, "0");
     const dayStart = new Date(yyyy, now.getMonth(), now.getDate());
     const dayEnd = new Date(yyyy, now.getMonth(), now.getDate() + 1);
+
     const todayCount = await Sale.countDocuments({
       createdAt: { $gte: dayStart, $lt: dayEnd },
     });
+
     const invoice_number = `INV-${yyyy}${mm}${dd}-${String(
       todayCount + 1
     ).padStart(3, "0")}`;
@@ -122,14 +125,16 @@ exports.createSale = async (req, res) => {
       await customerData.save();
     }
 
-    // 7) 📢 Adminlarga real-time signal yuborish (socket.io orqali)
-    const io = req.app.get("io"); // <-- SHU JOYDA IO OLAMIZ
+    // 7) 📢 SOCKET orqali adminlarga signal yuborish
+    const io = req.app.get("io"); // index.js da app.set("io", io) qilgan bo‘lishing kerak
     if (io) {
       io.emit("new_sale", {
         sale,
         customer: customerData,
         from: agentId ? "agent" : "admin",
       });
+    } else {
+      console.warn("⚠️ io topilmadi, socket event yuborilmadi");
     }
 
     return res.json({ success: true, sale, customer: customerData });
