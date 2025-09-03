@@ -2,7 +2,7 @@ const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
 const Store = require("../models/Store");
 const Client = require("../models/Client");
-
+const { io } = require("../index");
 // 🛒 Sotuv yaratish
 exports.createSale = async (req, res) => {
   try {
@@ -10,10 +10,10 @@ exports.createSale = async (req, res) => {
       req.body;
     paid_amount = Number(paid_amount) || 0;
 
-    // 🔑 Agentni token orqali olish (auth middleware qo'yadi)
+    // 🔑 Agentni token orqali olish
     const agentId = req.user?.agentId || null;
 
-    // 1) Mijozni topish yoki yaratish (telefon bo'yicha)
+    // 1) Mijozni topish yoki yaratish
     if (!customer || !customer.phone) {
       return res.status(400).json({ message: "customer.phone majburiy" });
     }
@@ -53,7 +53,7 @@ exports.createSale = async (req, res) => {
       const qty = Number(p.quantity) || 0;
       const purchase_price = Number(product.unit_price) || 0;
 
-      // Ombor kamaytiramiz
+      // Ombordan kamaytirish
       product.quantity -= qty;
       await product.save();
 
@@ -80,7 +80,7 @@ exports.createSale = async (req, res) => {
     }
     if (paid_amount > 0 && remaining_debt > 0) payment_method = "mixed";
 
-    // 4) (Ixtiyoriy) Faktura raqami
+    // 4) Faktura raqami
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -96,9 +96,9 @@ exports.createSale = async (req, res) => {
 
     // 5) Sotuvni yaratish
     const sale = await Sale.create({
-      invoice_number, // 👉 Sale schema’da bo‘lsa saqlanadi
+      invoice_number,
       customer_id: customerData._id,
-      agent_id: agentId || undefined, // admin sotganda null bo‘lishi mumkin
+      agent_id: agentId || undefined,
       products: saleProducts,
       total_amount,
       paid_amount,
@@ -106,14 +106,13 @@ exports.createSale = async (req, res) => {
       payment_method,
       payment_history:
         paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
-      shop_info: shop_info || {}, // 👉 Sale schema’da bo‘lsa saqlanadi
+      shop_info: shop_info || {},
     });
 
     // 6) Mijoz balansini yangilash
     if (typeof customerData.updateBalance === "function") {
       await customerData.updateBalance(total_amount, paid_amount);
     } else {
-      // fallback (agar eski Customer modeli bo'lsa)
       customerData.totalPurchased += total_amount;
       customerData.totalPaid += paid_amount;
       customerData.totalDebt = Math.max(
@@ -122,6 +121,13 @@ exports.createSale = async (req, res) => {
       );
       await customerData.save();
     }
+
+    // 7) 📢 Adminlarga real-time signal yuborish
+    io.emit("new_sale", {
+      sale,
+      customer: customerData,
+      from: agentId ? "agent" : "admin",
+    });
 
     return res.json({ success: true, sale, customer: customerData });
   } catch (err) {

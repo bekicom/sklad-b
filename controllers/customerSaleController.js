@@ -114,7 +114,6 @@ exports.getCustomerDebtors = async (req, res) => {
 };
 
 // 💰 Mijoz qarz to'lashi
-// 💰 Mijoz qarz to'lashi
 exports.payCustomerDebt = async (req, res) => {
   try {
     const { amount } = req.body;

@@ -3,6 +3,8 @@ const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const morgan = require("morgan");
+const http = require("http"); // 📌 qo‘shildi
+const { Server } = require("socket.io"); // 📌 qo‘shildi
 
 // 📌 .env faylni yuklash
 dotenv.config();
@@ -23,7 +25,7 @@ connectDB();
 const mainRouter = require("./routes/mainRouter");
 app.use("/api", mainRouter);
 
-// 📌 Xatoliklar uchun universal middleware (optional)
+// 📌 Xatoliklar uchun universal middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res
@@ -31,8 +33,29 @@ app.use((err, req, res, next) => {
     .json({ message: "Serverda xatolik yuz berdi", error: err.message });
 });
 
+// 📌 HTTP server va Socket.IO ulash
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // 🔐 frontend domenini yozib qo‘ysang ham bo‘ladi
+    methods: ["GET", "POST"],
+  },
+});
+
+// 📌 Socket ulanish
+io.on("connection", (socket) => {
+  console.log("🟢 Client ulandi:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("🔴 Client chiqdi:", socket.id);
+  });
+});
+
+// 📌 Boshqa fayllar ichida foydalanish uchun io’ni eksport qilamiz
+module.exports = { io };
+
 // 📌 Serverni ishga tushirish
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server ${PORT}-portda ishlamoqda`);
 });

@@ -48,11 +48,7 @@ const saleSchema = new mongoose.Schema(
       { amount: Number, date: { type: Date, default: Date.now } },
     ],
     // 📌 yangi qo‘shilgan
-    status: {
-      type: String,
-      enum: ["pending", "approved", "completed"],
-      default: "pending",
-    },
+ 
   },
   { timestamps: true }
 );
