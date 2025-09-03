@@ -1,17 +1,22 @@
 const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
 const Store = require("../models/Store");
-const Debtor = require("../models/debtor.model");
 const Client = require("../models/Client");
 
-// 🛒 Sotuv yaratish (mavjud kod + faktura raqami)
+// 🛒 Sotuv yaratish
 exports.createSale = async (req, res) => {
   try {
     let { customer, products, paid_amount, payment_method, shop_info } =
       req.body;
     paid_amount = Number(paid_amount) || 0;
 
-    // 1️⃣ Mijozni topish yoki yaratish
+    // 🔑 Agentni token orqali olish (auth middleware qo'yadi)
+    const agentId = req.user?.agentId || null;
+
+    // 1) Mijozni topish yoki yaratish (telefon bo'yicha)
+    if (!customer || !customer.phone) {
+      return res.status(400).json({ message: "customer.phone majburiy" });
+    }
     let customerData = await Customer.findOne({ phone: customer.phone });
     if (!customerData) {
       if (!customer.name) {
@@ -23,18 +28,18 @@ exports.createSale = async (req, res) => {
         name: customer.name,
         phone: customer.phone || "",
         address: customer.address || "",
-        totalPurchased: 0,
-        totalPaid: 0,
-        totalDebt: 0,
-        paymentHistory: [],
       });
     }
 
-    // 2️⃣ Mahsulotlarni tekshirish va ombordan ayirish
-    let total_amount = 0;
-    let saleProducts = [];
+    // 2) Ombordan mahsulotlarni ayirish + summalar
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: "Mahsulotlar bo'sh bo'lmasin" });
+    }
 
-    for (let p of products) {
+    let total_amount = 0;
+    const saleProducts = [];
+
+    for (const p of products) {
       const product = await Store.findById(p.product_id);
       if (!product || product.quantity < p.quantity) {
         return res.status(400).json({
@@ -44,181 +49,182 @@ exports.createSale = async (req, res) => {
         });
       }
 
-      const purchase_price = product.unit_price || 0;
+      const sellPrice = Number(p.price) || Number(product.sell_price) || 0;
+      const qty = Number(p.quantity) || 0;
+      const purchase_price = Number(product.unit_price) || 0;
 
-      // Ombordan kamaytirish
-      product.quantity -= p.quantity;
+      // Ombor kamaytiramiz
+      product.quantity -= qty;
       await product.save();
 
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
-        model: product.model,
         unit: product.unit,
-        price: p.price || product.sell_price,
+        price: sellPrice,
         purchase_price,
-        quantity: p.quantity,
+        quantity: qty,
         currency: product.currency,
         partiya_number: product.partiya_number,
       });
 
-      total_amount += (p.price || product.sell_price) * p.quantity;
+      total_amount += sellPrice * qty;
     }
 
-    // 3️⃣ Qolgan qarz summasi va to‘lov turi
-    const remaining_debt = total_amount - paid_amount;
-
-    // Agar frontenddan payment_method yuborilgan bo‘lsa, ishlatamiz, aks holda qarz/cash belgilaymiz
-    const validMethods = ["cash", "card", "qarz"];
-    if (!payment_method || !validMethods.includes(payment_method)) {
+    // 3) Qarzni hisoblash va to'lov turi
+    let remaining_debt = Math.max(total_amount - paid_amount, 0);
+    if (!payment_method) {
+      payment_method = remaining_debt > 0 ? "qarz" : "cash";
+    } else if (!["cash", "card", "qarz", "mixed"].includes(payment_method)) {
       payment_method = remaining_debt > 0 ? "qarz" : "cash";
     }
+    if (paid_amount > 0 && remaining_debt > 0) payment_method = "mixed";
 
-    // 4️⃣ Faktura raqami
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-
-    const todayStart = new Date(year, today.getMonth(), today.getDate());
-    const todayEnd = new Date(year, today.getMonth(), today.getDate() + 1);
-
+    // 4) (Ixtiyoriy) Faktura raqami
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const dayStart = new Date(yyyy, now.getMonth(), now.getDate());
+    const dayEnd = new Date(yyyy, now.getMonth(), now.getDate() + 1);
     const todayCount = await Sale.countDocuments({
-      createdAt: { $gte: todayStart, $lt: todayEnd },
+      createdAt: { $gte: dayStart, $lt: dayEnd },
     });
-
-    const invoice_number = `INV-${year}${month}${day}-${String(
+    const invoice_number = `INV-${yyyy}${mm}${dd}-${String(
       todayCount + 1
     ).padStart(3, "0")}`;
 
-    // 5️⃣ Sotuvni yaratish
+    // 5) Sotuvni yaratish
     const sale = await Sale.create({
-      invoice_number,
+      invoice_number, // 👉 Sale schema’da bo‘lsa saqlanadi
       customer_id: customerData._id,
+      agent_id: agentId || undefined, // admin sotganda null bo‘lishi mumkin
       products: saleProducts,
       total_amount,
       paid_amount,
-      payment_method,
       remaining_debt,
-      shop_info: shop_info || {
-        name: "Sizning do'koningiz",
-        address: "Do'kon manzili",
-        phone: "+998 90 123 45 67",
-      },
+      payment_method,
+      payment_history:
+        paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
+      shop_info: shop_info || {}, // 👉 Sale schema’da bo‘lsa saqlanadi
     });
 
-    // 6️⃣ Mijoz balansini yangilash
-    customerData.totalPurchased += total_amount;
-    customerData.totalPaid += paid_amount;
-    customerData.totalDebt =
-      customerData.totalPurchased - customerData.totalPaid;
-
-    if (!Array.isArray(customerData.paymentHistory)) {
-      customerData.paymentHistory = [];
+    // 6) Mijoz balansini yangilash
+    if (typeof customerData.updateBalance === "function") {
+      await customerData.updateBalance(total_amount, paid_amount);
+    } else {
+      // fallback (agar eski Customer modeli bo'lsa)
+      customerData.totalPurchased += total_amount;
+      customerData.totalPaid += paid_amount;
+      customerData.totalDebt = Math.max(
+        customerData.totalPurchased - customerData.totalPaid,
+        0
+      );
+      await customerData.save();
     }
 
-    if (remaining_debt > 0 && paid_amount > 0) {
-      customerData.paymentHistory.push({
-        amount: paid_amount,
-        date: new Date(),
-        note: "Qarz to'lovi (sotuv vaqtida)",
-      });
-    }
-
-    await customerData.save();
-
-    // 7️⃣ Debtor yozuvi
-    if (remaining_debt > 0) {
-      await Debtor.create({
-        customer_id: customerData._id,
-        products: saleProducts.map((p) => ({
-          product_id: p.product_id,
-          name: p.name,
-          quantity: p.quantity,
-          price: p.price,
-        })),
-        totalAmount: total_amount,
-        paidAmount: paid_amount,
-        remainingAmount: remaining_debt,
-        paymentHistory:
-          paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
-      });
-    }
-
-    res.json({ success: true, sale, customer: customerData });
+    return res.json({ success: true, sale, customer: customerData });
   } catch (err) {
     console.error("❌ createSale error:", err);
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-
-
-// 📄 Barcha sotuvlarni olish
+// 📄 Barcha sotuvlar (agent bo‘yicha filtrlash mumkin)
 exports.getAllSales = async (req, res) => {
   try {
-    const sales = await Sale.find()
+    const filter = {};
+    const { agentId, from, to } = req.query;
+
+    if (agentId) filter.agent_id = agentId;
+
+    if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
+      const startDate = new Date(from);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(to);
+      endDate.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const sales = await Sale.find(filter)
+      .populate("customer_id")
+      .populate("agent_id", "name phone")
+      .sort({ createdAt: -1 });
+
+    return res.json({ success: true, sales });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// 👤 AGENT: faqat o‘z sotuvlari
+exports.getMySales = async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "agent" || !req.user.agentId) {
+      return res.status(403).json({ message: "Faqat agentlar uchun ruxsat" });
+    }
+
+    const { from, to } = req.query;
+    const filter = { agent_id: req.user.agentId };
+
+    if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
+      const startDate = new Date(from);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(to);
+      endDate.setHours(23, 59, 59, 999);
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const sales = await Sale.find(filter)
       .populate("customer_id")
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, sales });
+    return res.json({ success: true, sales });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
 // 🔍 Bitta sotuvni olish
 exports.getSaleById = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id).populate("customer_id");
-
+    const sale = await Sale.findById(req.params.id)
+      .populate("customer_id")
+      .populate("agent_id", "name phone");
     if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
-
-    res.json({ success: true, sale });
+    return res.json({ success: true, sale });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// 🧾 Faktura ma'lumotlarini olish (print uchun)
+// 🧾 Faktura ma'lumotlari (print)
 exports.getInvoiceData = async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id)
       .populate("customer_id")
       .populate("products.product_id");
+    if (!sale) return res.status(404).json({ message: "Faktura topilmadi" });
 
-    if (!sale) {
-      return res.status(404).json({ message: "Faktura topilmadi" });
-    }
-
-    // Faktura ma'lumotlarini formatlash
     const invoiceData = {
-      // Faktura asosiy ma'lumotlari
-      invoice_number: sale.invoice_number,
+      invoice_number:
+        sale.invoice_number || `INV-${String(sale._id).slice(-8)}`, // fallback
       date: sale.createdAt,
-
-      // Do'kon ma'lumotlari
-      shop: sale.shop_info,
-
-      // Mijoz ma'lumotlari
+      shop: sale.shop_info || {},
       customer: {
-        name: sale.customer_id.name,
-        phone: sale.customer_id.phone,
-        address: sale.customer_id.address,
+        name: sale.customer_id?.name,
+        phone: sale.customer_id?.phone,
+        address: sale.customer_id?.address,
       },
-
-      // Mahsulotlar ro'yxati
-      products: sale.products.map((product) => ({
-        name: product.name,
-        model: product.model,
-        unit: product.unit,
-        quantity: product.quantity,
-        price: product.price,
-        total: product.price * product.quantity,
-        currency: product.currency,
+      products: (sale.products || []).map((p) => ({
+        name: p.name,
+        model: p.model,
+        unit: p.unit,
+        quantity: p.quantity,
+        price: p.price,
+        total: p.price * p.quantity,
+        currency: p.currency,
       })),
-
-      // To'lov ma'lumotlari
       payment: {
         total_amount: sale.total_amount,
         paid_amount: sale.paid_amount,
@@ -228,148 +234,140 @@ exports.getInvoiceData = async (req, res) => {
       },
     };
 
-    res.json({ success: true, invoice: invoiceData });
+    return res.json({ success: true, invoice: invoiceData });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// 💰 Qarz to'lash (yangilangan)
+// 💰 Qarz to'lash
 exports.payDebt = async (req, res) => {
   try {
     const { amount } = req.body;
     const sale = await Sale.findById(req.params.id);
-
     if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
 
-    // To'lov miqdorini tekshirish
-    if (amount <= 0) {
+    const add = Number(amount) || 0;
+    if (add <= 0)
       return res
         .status(400)
-        .json({ message: "To'lov miqdori 0 dan katta bo'lishi kerak" });
-    }
-
-    if (amount > sale.remaining_debt) {
+        .json({ message: "To'lov miqdori > 0 bo'lishi kerak" });
+    if (add > sale.remaining_debt) {
       return res
         .status(400)
-        .json({ message: "To'lov miqdori qarzdan katta bo'lishi mumkin emas" });
+        .json({ message: "To'lov miqdori qarzdan oshmasligi kerak" });
     }
 
-    sale.paid_amount += amount;
-    sale.remaining_debt -= amount;
+    sale.paid_amount += add;
+    sale.remaining_debt = Math.max(sale.total_amount - sale.paid_amount, 0);
+    sale.payment_history = sale.payment_history || [];
+    sale.payment_history.push({ amount: add, date: new Date() });
 
-    // Agar qarz to'liq to'langan bo'lsa
-    if (sale.remaining_debt <= 0) {
-      sale.payment_method = "to'landi";
-      sale.remaining_debt = 0;
+    // payment_method ni moslashtiramiz
+    if (sale.remaining_debt === 0) {
+      // "to'landi" degan qiymat enumda yo'q, shuning uchun cash/oldingi holatda qoldirish mumkin
+      sale.payment_method = sale.payment_method === "card" ? "card" : "cash";
+    } else {
+      sale.payment_method = "mixed";
     }
 
     await sale.save();
 
-    // Mijoz balansini ham yangilash
+    // Mijoz balansini yangilash
     const customer = await Customer.findById(sale.customer_id);
     if (customer) {
-      customer.totalPaid += amount;
-      customer.totalDebt = customer.totalPurchased - customer.totalPaid;
-      await customer.save();
+      if (typeof customer.updateBalance === "function") {
+        await customer.updateBalance(0, add);
+      } else {
+        customer.totalPaid += add;
+        customer.totalDebt = Math.max(
+          customer.totalPurchased - customer.totalPaid,
+          0
+        );
+        await customer.save();
+      }
     }
 
-    res.json({ success: true, sale });
+    return res.json({ success: true, sale });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// 📊 Qarzchilar ro'yxati (yangilangan)
+// 📊 Qarzchilar ro'yxati
 exports.getDebtors = async (req, res) => {
   try {
     const debtors = await Sale.find({ remaining_debt: { $gt: 0 } })
       .populate("customer_id")
+      .populate("agent_id", "name phone")
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, debtors });
+    return res.json({ success: true, debtors });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// 🔄 Faktura qayta chop etish
+// 🔄 Faktura qayta chop etish (asosiy ma'lumot)
 exports.reprintInvoice = async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id).populate("customer_id");
-
-    if (!sale) {
-      return res.status(404).json({ message: "Faktura topilmadi" });
-    }
-
-    res.json({
+    if (!sale) return res.status(404).json({ message: "Faktura topilmadi" });
+    return res.json({
       success: true,
       message: "Faktura qayta chop etishga tayyor",
       sale,
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// Qolgan kodlar bir xil...
+// ✏️ Yangilash
 exports.updateSale = async (req, res) => {
   try {
     const sale = await Sale.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
     });
-
     if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
-
-    res.json({ success: true, sale });
+    return res.json({ success: true, sale });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
+// 🗑️ O'chirish
 exports.deleteSale = async (req, res) => {
   try {
     const sale = await Sale.findByIdAndDelete(req.params.id);
-
     if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
-
-    res.json({ success: true, message: "Sotuv o'chirildi" });
+    return res.json({ success: true, message: "Sotuv o'chirildi" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
+// 📈 Statistika
 exports.getSalesStats = async (req, res) => {
   try {
     const { from, to } = req.query;
     const dateFilter = {};
 
-    // Sanaga filter qo‘shish
     if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
       const startDate = new Date(from);
-      startDate.setHours(0, 0, 0, 0); // kun boshi
-
+      startDate.setHours(0, 0, 0, 0);
       const endDate = new Date(to);
-      endDate.setHours(23, 59, 59, 999); // kun oxiri
-
-      dateFilter.createdAt = {
-        $gte: startDate,
-        $lte: endDate,
-      };
+      endDate.setHours(23, 59, 59, 999);
+      dateFilter.createdAt = { $gte: startDate, $lte: endDate };
     }
 
-    // Sotuvlar
     const sales = await Sale.find(dateFilter)
-      .populate({
-        path: "products.product_id",
-        select: "purchase_price unit",
-      })
+      .populate({ path: "products.product_id", select: "purchase_price unit" })
       .populate("customer_id");
 
-    // Yetkazib beruvchilar va to‘lovlari
     const clients = await Client.find().select("paymentHistory");
 
-    let stats = {
+    const stats = {
       total_sales_count: 0,
       total_revenue: 0,
       total_profit: 0,
@@ -377,49 +375,50 @@ exports.getSalesStats = async (req, res) => {
       card_total: 0,
       debt_total: 0,
       product_details: {},
-      store_debt_received: 0, // Do‘kondan kelgan qarz to‘lovlari
-      supplier_payments_total: 0, // Yetkazib beruvchiga to‘langan pullar
+      store_debt_received: 0,
+      supplier_payments_total: 0,
     };
 
     sales.forEach((sale) => {
       stats.total_sales_count++;
       stats.total_revenue += sale.total_amount || 0;
 
-      // To‘lov turini ajratish
+      // To'lov turlari
       switch (sale.payment_method) {
         case "cash":
           stats.cash_total += sale.total_amount || 0;
           break;
-
         case "card":
           stats.card_total += sale.total_amount || 0;
           break;
-
-        case "debt":
         case "qarz":
-          const remainingDebt =
-            typeof sale.remaining_debt === "number"
-              ? sale.remaining_debt
-              : (sale.total_amount || 0) - (sale.paid_amount || 0);
-
-          stats.debt_total += remainingDebt;
-          stats.cash_total += sale.paid_amount || 0; // qisman to‘lov
+          // barcha summa qarzga
+          stats.debt_total += Math.max(
+            (sale.total_amount || 0) - (sale.paid_amount || 0),
+            0
+          );
           break;
-
+        case "mixed":
+          // qisman to'langan
+          stats.cash_total += sale.paid_amount || 0;
+          stats.debt_total += Math.max(
+            (sale.total_amount || 0) - (sale.paid_amount || 0),
+            0
+          );
+          break;
         default:
           stats.cash_total += sale.total_amount || 0;
           break;
       }
 
-      // Mahsulot bo‘yicha hisob-kitob
-      sale.products.forEach((p) => {
-        const product = p.product_id || {};
-        const purchasePrice = product.purchase_price || 0;
-        const sellPrice = p.price || 0;
-        const quantity = p.quantity || 0;
+      // Mahsulot bo'yicha foyda
+      (sale.products || []).forEach((p) => {
+        const purchasePrice = Number(p.purchase_price) || 0;
+        const sellPrice = Number(p.price) || 0;
+        const qty = Number(p.quantity) || 0;
 
-        const revenue = sellPrice * quantity;
-        const cost = purchasePrice * quantity;
+        const revenue = sellPrice * qty;
+        const cost = purchasePrice * qty;
         const profit = revenue - cost;
 
         stats.total_profit += profit;
@@ -429,16 +428,15 @@ exports.getSalesStats = async (req, res) => {
             revenue: 0,
             cost: 0,
             profit: 0,
-            unit: p.unit || product.unit || "dona",
+            unit: p.unit || "dona",
           };
         }
-
         stats.product_details[p.name].revenue += revenue;
         stats.product_details[p.name].cost += cost;
         stats.product_details[p.name].profit += profit;
       });
 
-      // Do‘kondan kelgan qarz to‘lovlari
+      // Do'kondan kelgan qarz to'lovlari
       (sale.payment_history || []).forEach((ph) => {
         if (ph.amount && ph.amount > 0) {
           stats.store_debt_received += ph.amount;
@@ -446,19 +444,60 @@ exports.getSalesStats = async (req, res) => {
       });
     });
 
-    // Yetkazib beruvchiga to‘lovlar
-    clients.forEach((client) => {
-      (client.paymentHistory || []).forEach((p) => {
-        stats.supplier_payments_total += p.amount || 0;
-      });
-    });
-
     stats.total_profit = Number(stats.total_profit.toFixed(2));
-
-    res.json({ success: true, stats });
+    return res.json({ success: true, stats });
   } catch (err) {
     console.error("❌ getSalesStats error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+// controller
+// ✅ Admin tomonidan sotuvni tasdiqlash va chek chiqarish
+exports.approveSale = async (req, res) => {
+  try {
+    const sale = await Sale.findById(req.params.id).populate("products.product_id");
+    if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
+
+    if (sale.status !== "pending") {
+      return res.status(400).json({ message: "Bu sotuv allaqachon tasdiqlangan yoki yakunlangan" });
+    }
+
+    // Ombordan mahsulotlarni kamaytirish
+    for (let p of sale.products) {
+      const product = await Store.findById(p.product_id);
+      if (!product || product.quantity < p.quantity) {
+        return res.status(400).json({ message: `Omborda ${p.name} yetarli emas` });
+      }
+      product.quantity -= p.quantity;
+      await product.save();
+    }
+
+    sale.status = "approved";
+    await sale.save();
+
+    res.json({ success: true, sale });
+  } catch (err) {
+    console.error("❌ approveSale error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
+// 📌 Admin: Bitta agent sotuvlari
+exports.getSalesByAgent = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    if (!agentId) {
+      return res.status(400).json({ message: "Agent ID kiritilmadi" });
+    }
+
+    const sales = await Sale.find({ agent_id: agentId })
+      .populate("customer_id", "name phone address")
+      .populate("agent_id", "name phone")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, sales });
+  } catch (err) {
+    console.error("❌ getSalesByAgent error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};

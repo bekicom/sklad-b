@@ -10,9 +10,6 @@ const storeController = require("../controllers/store.controller");
 const saleController = require("../controllers/sale.controller");
 const debtorController = require("../controllers/debtor.controller");
 const expenseController = require("../controllers/expense.controller");
-
-
-// 🔹 AGENT CONTROLLER (qo'shildi)
 const agentController = require("../controllers/agent.controller");
 
 // ===================== MIDDLEWARE =====================
@@ -22,18 +19,28 @@ const au = require("../middlewares/auth.middleware");
 router.post("/register", userController.registerUser);
 router.post("/login", userController.loginUser);
 
-// ===================== AGENTS (yangi) =====================
-// Admin himoyasi uchun hozircha verifyToken qo'ydim.
-// Kerak bo'lsa keyin onlyAdmin qo'shib beramiz.
-router.post("/agents/login", agentController.loginAgent); // agent telefonidan login
-router.post("/agents", au.verifyToken, agentController.createAgent); // agent yaratish (ism, tel, login, parol)
-router.get("/agents", au.verifyToken, agentController.listAgents); // agentlar ro'yxati
-router.put("/agents/:id", au.verifyToken, agentController.updateAgent); // agent ma'lumotini yangilash (parolsiz)
+// ===================== AGENTS =====================
+// 🔑 Agent login
+router.post("/agents/login", agentController.loginAgent);
+
+// ➕ Admin yangi agent qo‘shishi
+router.post("/agents", au.verifyToken, agentController.createAgent);
+
+// 📋 Agentlar ro‘yxati
+router.get("/agents", au.verifyToken, agentController.listAgents);
+
+// ✏️ Agent yangilash
+router.put("/agents/:id", au.verifyToken, agentController.updateAgent);
+
+// 🔑 Agent parolini yangilash
 router.patch(
   "/agents/:id/reset-password",
   au.verifyToken,
   agentController.resetAgentPassword
-); // parolni yangilash
+);
+
+// 📊 Bitta agent sotuvlari (admin → agent detail sahifasi)
+router.get("/agents/:id/sales", au.verifyToken, saleController.getSalesByAgent);
 
 // ===================== CLIENT ROUTES =====================
 router.get("/clienthistory/:id/", clientController.getClientImportsHistory);
@@ -44,7 +51,7 @@ router.get("/clients/:id", au.verifyToken, clientController.getClientById);
 router.put("/clients/:id", au.verifyToken, clientController.updateClient);
 router.delete("/clients/:id", au.verifyToken, clientController.deleteClient);
 
-// 🔹 Client qarz to‘lash va tarix
+// 🔹 Client qarzlar
 router.post("/clients/:clientId/pay", au.verifyToken, clientController.payDebt);
 router.post(
   "/clients/:clientId/debt",
@@ -130,12 +137,36 @@ router.delete("/store/:id", au.verifyToken, storeController.deleteStoreItem);
 router.get("/grouped", au.verifyToken, storeController.getGroupedStoreItems);
 
 // ===================== SALES =====================
+// ➕ Yangi sotuv (agent yoki admin)
 router.post("/sales", au.verifyToken, saleController.createSale);
+
+// 📋 Barcha sotuvlar (admin → hamma agentlar va kassirlar sotuvlari)
 router.get("/sales", au.verifyToken, saleController.getAllSales);
+
+// 👤 Faqat shu agentning o‘z sotuvlari (token orqali)
+router.get("/sales/my", au.verifyToken, saleController.getMySales);
+
+// 📊 Agent bo‘yicha sotuvlar (admin → filter qilinganda)
+router.get(
+  "/sales/agent/:agentId",
+  au.verifyToken,
+  saleController.getSalesByAgent
+);
+
+// 👥 Qarzdorlar
 router.get("/sales/debtors", au.verifyToken, saleController.getDebtors);
+
+// 💳 Qarzni to‘lash
 router.put("/sales/pay/:id", au.verifyToken, saleController.payDebt);
+
+// 🧾 Faktura olish
 router.get("/sales/:id/invoice", au.verifyToken, saleController.getInvoiceData);
+
+// 📈 Statistika
 router.get("/sales/stats", au.verifyToken, saleController.getSalesStats);
+
+// ✅ Sotuvni tasdiqlash (admin → pending → approved)
+router.put("/sales/:id/approve", au.verifyToken, saleController.approveSale);
 
 // ===================== DEBTORS =====================
 router.post("/debtors", au.verifyToken, debtorController.createDebtor);
