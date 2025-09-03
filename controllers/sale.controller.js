@@ -122,12 +122,15 @@ exports.createSale = async (req, res) => {
       await customerData.save();
     }
 
-    // 7) 📢 Adminlarga real-time signal yuborish
-    io.emit("new_sale", {
-      sale,
-      customer: customerData,
-      from: agentId ? "agent" : "admin",
-    });
+    // 7) 📢 Adminlarga real-time signal yuborish (socket.io orqali)
+    const io = req.app.get("io"); // <-- SHU JOYDA IO OLAMIZ
+    if (io) {
+      io.emit("new_sale", {
+        sale,
+        customer: customerData,
+        from: agentId ? "agent" : "admin",
+      });
+    }
 
     return res.json({ success: true, sale, customer: customerData });
   } catch (err) {
@@ -135,6 +138,7 @@ exports.createSale = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
 
 // 📄 Barcha sotuvlar (agent bo‘yicha filtrlash mumkin)
 exports.getAllSales = async (req, res) => {
