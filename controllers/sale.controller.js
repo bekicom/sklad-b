@@ -3,7 +3,10 @@ const Customer = require("../models/Customer");
 const Store = require("../models/Store");
 const Client = require("../models/Client");
 const { io } = require("../index");
+const Agent = require("../models/Agent");
 // 🛒 Sotuv yaratish
+
+
 exports.createSale = async (req, res) => {
   try {
     let { customer, products, paid_amount, payment_method, shop_info } =
@@ -11,7 +14,19 @@ exports.createSale = async (req, res) => {
     paid_amount = Number(paid_amount) || 0;
 
     // 🔑 Agentni token orqali olish
-    const agentId = req.user?.agentId || null;
+    const agentId = req.user?.agentId || req.user?._id || null;
+    const isAgent = req.user?.role === "agent";
+
+    // Agent ma'lumotlarini olish (agar agent bo'lsa)
+    let agentData = null;
+    if (agentId && isAgent) {
+      agentData = await Agent.findById(agentId).select("name phone location");
+      if (!agentData) {
+        return res
+          .status(403)
+          .json({ message: "Agent ma'lumotlari topilmadi" });
+      }
+    }
 
     // 1) Mijozni topish yoki yaratish
     if (!customer || !customer.phone) {
@@ -54,13 +69,14 @@ exports.createSale = async (req, res) => {
       const qty = Number(p.quantity) || 0;
       const purchase_price = Number(product.unit_price) || 0;
 
-      // Ombordan kamaytirish
+      // Ombordan kamaytirish (AVTOMATIK)
       product.quantity -= qty;
       await product.save();
 
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
+        model: product.model || "",
         unit: product.unit,
         price: sellPrice,
         purchase_price,
@@ -72,7 +88,7 @@ exports.createSale = async (req, res) => {
       total_amount += sellPrice * qty;
     }
 
-    // 3) Qarzni hisoblash va to‘lov turi
+    // 3) Qarzni hisoblash va to'lov turi
     let remaining_debt = Math.max(total_amount - paid_amount, 0);
     if (!payment_method) {
       payment_method = remaining_debt > 0 ? "qarz" : "cash";
@@ -98,10 +114,9 @@ exports.createSale = async (req, res) => {
     ).padStart(3, "0")}`;
 
     // 5) Sotuvni yaratish
-    const sale = await Sale.create({
+    const saleData = {
       invoice_number,
       customer_id: customerData._id,
-      agent_id: agentId || undefined,
       products: saleProducts,
       total_amount,
       paid_amount,
@@ -109,8 +124,28 @@ exports.createSale = async (req, res) => {
       payment_method,
       payment_history:
         paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
-      shop_info: shop_info || {},
-    });
+      shop_info: shop_info || {
+        name: "MAZZALI",
+        address: "Toshkent sh.",
+        phone: "+998 94 732 44 44",
+      },
+      status: "completed", // Agent sotuvi avtomatik completed
+    };
+
+    // Agent ma'lumotlarini qo'shish
+    if (agentData) {
+      saleData.agent_id = agentData._id;
+      saleData.sale_type = "agent";
+      saleData.agent_info = {
+        name: agentData.name,
+        phone: agentData.phone,
+        location: agentData.location || "Noma'lum",
+      };
+    } else {
+      saleData.sale_type = "admin";
+    }
+
+    const sale = await Sale.create(saleData);
 
     // 6) Mijoz balansini yangilash
     if (typeof customerData.updateBalance === "function") {
@@ -125,24 +160,94 @@ exports.createSale = async (req, res) => {
       await customerData.save();
     }
 
-    // 7) 📢 SOCKET orqali adminlarga signal yuborish
-    const io = req.app.get("io"); // index.js da app.set("io", io) qilgan bo‘lishing kerak
+    // 7) Populate qilib, to'liq ma'lumot olish
+    const populatedSale = await Sale.findById(sale._id)
+      .populate("customer_id", "name phone address")
+      .populate("agent_id", "name phone location");
+
+    // 8) 📢 SOCKET orqali adminlarga REAL-TIME signal yuborish
+    const io = req.app.get("io");
     if (io) {
-      io.emit("new_sale", {
-        sale,
+      const socketData = {
+        type: isAgent ? "agent_sale" : "admin_sale",
+        sale: populatedSale,
         customer: customerData,
-        from: agentId ? "agent" : "admin",
+        agent: agentData,
+        products: saleProducts,
+        timestamp: new Date(),
+        message: isAgent
+          ? `${agentData.name} tomonidan yangi sotuv amalga oshirildi`
+          : "Yangi admin sotuv amalga oshirildi",
+      };
+
+      // Adminlarga yuborish
+      io.to("admins").emit("new_sale_notification", socketData);
+
+      // Barcha foydalanuvchilarga (umumiy)
+      io.emit("sale_created", {
+        sale_id: sale._id,
+        invoice_number: sale.invoice_number,
+        total_amount: sale.total_amount,
+        sale_type: sale.sale_type,
+        agent_name: agentData?.name || "Admin",
       });
+
+      console.log(
+        `✅ Socket signal yuborildi: ${isAgent ? "Agent" : "Admin"} sotuv`
+      );
     } else {
-      console.warn("⚠️ io topilmadi, socket event yuborilmadi");
+      console.warn(
+        "⚠️ Socket.io topilmadi, real-time bildirishnoma yuborilmadi"
+      );
     }
 
-    return res.json({ success: true, sale, customer: customerData });
+    // 9) Log yozish
+    console.log(`📊 Yangi sotuv yaratildi:`, {
+      invoice_number: sale.invoice_number,
+      customer: customerData.name,
+      agent: agentData?.name || "Admin",
+      total: total_amount,
+      products_count: saleProducts.length,
+    });
+
+    return res.json({
+      success: true,
+      sale: populatedSale,
+      customer: customerData,
+      message: isAgent
+        ? "Agent sotuv muvaffaqiyatli amalga oshirildi"
+        : "Sotuv muvaffaqiyatli amalga oshirildi",
+    });
   } catch (err) {
     console.error("❌ createSale error:", err);
-    return res.status(500).json({ message: err.message });
+
+    // Xatolik bo'lganda omborga qaytarish (rollback)
+    if (req.body.products && Array.isArray(req.body.products)) {
+      try {
+        for (const p of req.body.products) {
+          const product = await Store.findById(p.product_id);
+          if (product) {
+            product.quantity += Number(p.quantity) || 0;
+            await product.save();
+          }
+        }
+        console.log("🔄 Omborga qaytarildi (rollback)");
+      } catch (rollbackErr) {
+        console.error("❌ Rollback xatoligi:", rollbackErr);
+      }
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
+
+
+
+
 
 
 // 📄 Barcha sotuvlar (agent bo‘yicha filtrlash mumkin)
@@ -151,8 +256,10 @@ exports.getAllSales = async (req, res) => {
     const filter = {};
     const { agentId, from, to } = req.query;
 
+    // Agent ID bo'yicha filtr
     if (agentId) filter.agent_id = agentId;
 
+    // Sana bo'yicha filtr
     if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
       const startDate = new Date(from);
       startDate.setHours(0, 0, 0, 0);
@@ -161,14 +268,51 @@ exports.getAllSales = async (req, res) => {
       filter.createdAt = { $gte: startDate, $lte: endDate };
     }
 
+    // Sotuvlarni olish (Agent model'siz, faqat ma'lumotlarni olish)
     const sales = await Sale.find(filter)
-      .populate("customer_id")
-      .populate("agent_id", "name phone")
+      .populate("customer_id", "name phone address")
       .sort({ createdAt: -1 });
 
-    return res.json({ success: true, sales });
+    // Agent ma'lumotlarini qo'lda qo'shish (agar agent_info da saqlangan bo'lsa)
+    const salesWithAgentInfo = sales.map((sale) => {
+      const saleObj = sale.toObject();
+
+      // Agent ma'lumotini turli joylardan olish
+      if (saleObj.agent_info) {
+        // Agar agent_info da saqlangan bo'lsa
+        saleObj.agent_id = {
+          _id: saleObj.agent_id || "unknown",
+          name: saleObj.agent_info.name || "Noma'lum Agent",
+          phone: saleObj.agent_info.phone || "",
+          location: saleObj.agent_info.location || "",
+        };
+      } else if (saleObj.agent_id && !saleObj.agent_id.name) {
+        // Agar faqat agent_id ObjectId bo'lsa, default ma'lumot
+        saleObj.agent_id = {
+          _id: saleObj.agent_id,
+          name: "Agent",
+          phone: "",
+          location: "",
+        };
+      }
+
+      return saleObj;
+    });
+
+    return res.json({
+      success: true,
+      sales: salesWithAgentInfo,
+      count: salesWithAgentInfo.length,
+      agentCount: salesWithAgentInfo.filter(
+        (s) => s.sale_type === "agent" || s.agent_id
+      ).length,
+    });
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    console.error("❌ getAllSales error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
@@ -218,19 +362,32 @@ exports.getInvoiceData = async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id)
       .populate("customer_id")
-      .populate("products.product_id");
+      .populate("products.product_id")
+      .populate("agent_id", "name phone location");
+
     if (!sale) return res.status(404).json({ message: "Faktura topilmadi" });
+
+    // Agent ma'lumotlarini olish
+    const agentData = sale.agent_id || sale.agent_info;
+    const isAgentSale = !!(agentData || sale.sale_type === "agent");
 
     const invoiceData = {
       invoice_number:
-        sale.invoice_number || `INV-${String(sale._id).slice(-8)}`, // fallback
+        sale.invoice_number || `INV-${String(sale._id).slice(-8)}`,
       date: sale.createdAt,
-      shop: sale.shop_info || {},
+
+      shop: sale.shop_info || {
+        name: "MAZZALI",
+        address: "Toshkent sh.",
+        phone: "+998 94 732 44 44",
+      },
+
       customer: {
         name: sale.customer_id?.name,
         phone: sale.customer_id?.phone,
         address: sale.customer_id?.address,
       },
+
       products: (sale.products || []).map((p) => ({
         name: p.name,
         model: p.model,
@@ -239,7 +396,9 @@ exports.getInvoiceData = async (req, res) => {
         price: p.price,
         total: p.price * p.quantity,
         currency: p.currency,
+        partiya_number: p.partiya_number,
       })),
+
       payment: {
         total_amount: sale.total_amount,
         paid_amount: sale.paid_amount,
@@ -247,13 +406,38 @@ exports.getInvoiceData = async (req, res) => {
         payment_method: sale.payment_method,
         payment_status: sale.remaining_debt > 0 ? "qarz" : "to'liq to'langan",
       },
+
+      // Agent ma'lumotlarini qo'shish
+      ...(isAgentSale && {
+        agent_id: agentData,
+        agent_info: sale.agent_info,
+        agent_name: agentData?.name || sale.agent_info?.name,
+        agent_phone: agentData?.phone || sale.agent_info?.phone,
+        agent_location: agentData?.location || sale.agent_info?.location,
+        sale_type: sale.sale_type,
+        isAgentSale: true,
+        seller: "Agent",
+      }),
+
+      // Agent bo'lmasa admin sotuvi
+      ...(!isAgentSale && {
+        seller: "Admin",
+        isAgentSale: false,
+      }),
+
+      // Qo'shimcha ma'lumotlar
+      check_number: sale.check_number || String(sale._id).slice(-6),
     };
 
     return res.json({ success: true, invoice: invoiceData });
   } catch (err) {
+    console.error("getInvoiceData error:", err);
     return res.status(500).json({ message: err.message });
   }
 };
+
+
+
 
 // 💰 Qarz to'lash
 exports.payDebt = async (req, res) => {
@@ -362,7 +546,7 @@ exports.deleteSale = async (req, res) => {
   }
 };
 
-// 📈 Statistika
+
 exports.getSalesStats = async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -398,37 +582,51 @@ exports.getSalesStats = async (req, res) => {
       stats.total_sales_count++;
       stats.total_revenue += sale.total_amount || 0;
 
-      // To'lov turlari
+      // To'lov turlarini to'g'ri hisoblash
+      const totalAmount = sale.total_amount || 0;
+      const paidAmount = sale.paid_amount || 0;
+      const remainingDebt = sale.remaining_debt || Math.max(totalAmount - paidAmount, 0);
+
       switch (sale.payment_method) {
         case "cash":
-          stats.cash_total += sale.total_amount || 0;
+          stats.cash_total += totalAmount;
           break;
         case "card":
-          stats.card_total += sale.total_amount || 0;
+          stats.card_total += totalAmount;
           break;
         case "qarz":
-          // barcha summa qarzga
-          stats.debt_total += Math.max(
-            (sale.total_amount || 0) - (sale.paid_amount || 0),
-            0
-          );
+          // Faqat qarz bo'lsa - hech narsa to'lanmagan
+          stats.debt_total += remainingDebt;
+          if (paidAmount > 0) {
+            stats.cash_total += paidAmount; // qisman to'lov bo'lsa
+          }
           break;
         case "mixed":
-          // qisman to'langan
-          stats.cash_total += sale.paid_amount || 0;
-          stats.debt_total += Math.max(
-            (sale.total_amount || 0) - (sale.paid_amount || 0),
-            0
-          );
+          // Aralash to'lov - qisman to'langan
+          stats.cash_total += paidAmount;
+          stats.debt_total += remainingDebt;
           break;
         default:
-          stats.cash_total += sale.total_amount || 0;
+          // Boshqa holatlar uchun default
+          if (remainingDebt > 0) {
+            stats.cash_total += paidAmount;
+            stats.debt_total += remainingDebt;
+          } else {
+            stats.cash_total += totalAmount;
+          }
           break;
       }
 
-      // Mahsulot bo'yicha foyda
+      // Mahsulot bo'yicha foyda hisoblash
       (sale.products || []).forEach((p) => {
-        const purchasePrice = Number(p.purchase_price) || 0;
+        // Purchase price ni product_id dan yoki to'g'ridan-to'g'ri p dan olish
+        let purchasePrice = 0;
+        if (p.product_id && p.product_id.purchase_price) {
+          purchasePrice = Number(p.product_id.purchase_price) || 0;
+        } else if (p.purchase_price) {
+          purchasePrice = Number(p.purchase_price) || 0;
+        }
+
         const sellPrice = Number(p.price) || 0;
         const qty = Number(p.quantity) || 0;
 
@@ -436,7 +634,10 @@ exports.getSalesStats = async (req, res) => {
         const cost = purchasePrice * qty;
         const profit = revenue - cost;
 
-        stats.total_profit += profit;
+        // Faqat to'g'ri ma'lumotlar bo'lsa foyda hisoblaymiz
+        if (purchasePrice > 0 && sellPrice > 0 && qty > 0) {
+          stats.total_profit += profit;
+        }
 
         if (!stats.product_details[p.name]) {
           stats.product_details[p.name] = {
@@ -444,17 +645,29 @@ exports.getSalesStats = async (req, res) => {
             cost: 0,
             profit: 0,
             unit: p.unit || "dona",
+            quantity_sold: 0,
           };
         }
+        
         stats.product_details[p.name].revenue += revenue;
         stats.product_details[p.name].cost += cost;
         stats.product_details[p.name].profit += profit;
+        stats.product_details[p.name].quantity_sold += qty;
       });
 
       // Do'kondan kelgan qarz to'lovlari
       (sale.payment_history || []).forEach((ph) => {
         if (ph.amount && ph.amount > 0) {
           stats.store_debt_received += ph.amount;
+        }
+      });
+    });
+
+    // Yetkazib beruvchiga to'lovlar
+    clients.forEach((client) => {
+      (client.paymentHistory || []).forEach((p) => {
+        if (p.amount && p.amount > 0) {
+          stats.supplier_payments_total += p.amount;
         }
       });
     });
