@@ -7,7 +7,11 @@ const saleSchema = new mongoose.Schema(
       type: String,
       unique: true,
       required: true,
+      default: function () {
+        return "INV-" + Date.now(); // masalan: INV-1693839200000
+      },
     },
+
     customer_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer",

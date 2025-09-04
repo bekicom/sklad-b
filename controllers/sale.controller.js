@@ -442,7 +442,7 @@ exports.getInvoiceData = async (req, res) => {
 // 💰 Qarz to'lash
 exports.payDebt = async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, method } = req.body; // method qo‘shish foydali (naqd/karta)
     const sale = await Sale.findById(req.params.id);
     if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
 
@@ -457,30 +457,37 @@ exports.payDebt = async (req, res) => {
         .json({ message: "To'lov miqdori qarzdan oshmasligi kerak" });
     }
 
+    // To'lovni qo‘shish
     sale.paid_amount += add;
     sale.remaining_debt = Math.max(sale.total_amount - sale.paid_amount, 0);
-    sale.payment_history = sale.payment_history || [];
-    sale.payment_history.push({ amount: add, date: new Date() });
 
-    // payment_method ni moslashtiramiz
+    sale.payment_history = sale.payment_history || [];
+    sale.payment_history.push({
+      amount: add,
+      date: new Date(),
+      method: method || "cash",
+    });
+
+    // ✅ To‘lov usuli aniqlash
     if (sale.remaining_debt === 0) {
-      // "to'landi" degan qiymat enumda yo'q, shuning uchun cash/oldingi holatda qoldirish mumkin
-      sale.payment_method = sale.payment_method === "card" ? "card" : "cash";
+      // qarz yopilgan → oxirgi to‘lov methodiga qarab belgilaymiz
+      sale.payment_method = method || sale.payment_method || "cash";
     } else {
+      // qisman yopilgan
       sale.payment_method = "mixed";
     }
 
     await sale.save();
 
-    // Mijoz balansini yangilash
+    // ✅ Mijoz balansini yangilash
     const customer = await Customer.findById(sale.customer_id);
     if (customer) {
       if (typeof customer.updateBalance === "function") {
-        await customer.updateBalance(0, add);
+        await customer.updateBalance(0, add); // 0 = purchase qo‘shilmadi, add = to‘lov qo‘shildi
       } else {
-        customer.totalPaid += add;
+        customer.totalPaid = (customer.totalPaid || 0) + add;
         customer.totalDebt = Math.max(
-          customer.totalPurchased - customer.totalPaid,
+          (customer.totalPurchased || 0) - customer.totalPaid,
           0
         );
         await customer.save();
@@ -489,6 +496,7 @@ exports.payDebt = async (req, res) => {
 
     return res.json({ success: true, sale });
   } catch (err) {
+    console.error("payDebt error:", err);
     return res.status(500).json({ message: err.message });
   }
 };
