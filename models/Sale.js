@@ -63,6 +63,20 @@ const saleSchema = new mongoose.Schema(
       address: { type: String, default: "Toshkent sh." },
       phone: { type: String, default: "+998 94 732 44 44" },
     },
+    // Sotuv holatini kuzatish
+    status: {
+      type: String,
+      enum: ["completed", "pending", "cancelled"],
+      default: "completed",
+    },
+
+    // 🔥 Pechat holatini kuzatish
+    print_status: {
+      type: String,
+      enum: ["not_printed", "printed"],
+      default: "not_printed",
+    },
+    printedAt: { type: Date },
 
     // Sotuv holatini kuzatish
     status: {

@@ -743,3 +743,23 @@ exports.getSalesByAgent = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+// PATCH /api/sales/:id/print
+exports.markAsPrinted = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const sale = await Sale.findByIdAndUpdate(
+      id,
+      { $set: { print_status: "printed", printedAt: new Date() } },
+      { new: true }
+    );
+
+    if (!sale) {
+      return res.status(404).json({ success: false, message: "Sale topilmadi" });
+    }
+
+    res.json({ success: true, sale });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

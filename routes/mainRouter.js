@@ -167,6 +167,7 @@ router.get("/sales/stats", au.verifyToken, saleController.getSalesStats);
 
 // ✅ Sotuvni tasdiqlash (admin → pending → approved)
 router.put("/sales/:id/approve", au.verifyToken, saleController.approveSale);
+router.patch("/sales/:id/print", au.verifyToken, saleController.markAsPrinted);
 
 // ===================== DEBTORS =====================
 router.post("/debtors", au.verifyToken, debtorController.createDebtor);
