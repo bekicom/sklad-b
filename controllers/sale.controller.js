@@ -67,7 +67,7 @@ exports.createSale = async (req, res) => {
 
       const sellPrice = Number(p.price) || Number(product.sell_price) || 0;
       const qty = Number(p.quantity) || 0;
-      const purchase_price = Number(product.unit_price) || 0;
+     const purchase_price = Number(product.purchase_price) || 0;
 
       // Ombordan kamaytirish (AVTOMATIK)
       product.quantity -= qty;
