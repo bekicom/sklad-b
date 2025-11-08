@@ -19,9 +19,6 @@ const getAllStoreItems = async (req, res) => {
   }
 };
 
-/**
- * Importdan omborga mahsulot yaratish (qo'lda narx kiritish)
- */
 const createStoreFromImport = async (importData) => {
   try {
     console.log("Import data for store:", importData);
@@ -70,9 +67,6 @@ const createStoreFromImport = async (importData) => {
   }
 };
 
-/**
- * Ombordagi mahsulotlarni umumlashtirib olish
- */
 const getAllStoreProducts = async (req, res) => {
   try {
     const products = await Store.aggregate([
@@ -96,14 +90,6 @@ const getAllStoreProducts = async (req, res) => {
   }
 };
 
-/**
- * Ombordagi mahsulotni tahrirlash
- */
-
-
-/**
- * Ombordagi mahsulotni o'chirish
- */
 const deleteStoreItem = async (req, res) => {
   try {
     const { id } = req.params;
@@ -122,9 +108,6 @@ const deleteStoreItem = async (req, res) => {
   }
 };
 
-/**
- * Partiya bo'yicha guruhlash
- */
 const getGroupedStoreItems = async (req, res) => {
   try {
     const usd_rate = Number(req.query.usd_rate) || 0;
@@ -249,5 +232,4 @@ module.exports = {
   updateStoreItem,
   deleteStoreItem,
   getGroupedStoreItems,
- 
 };

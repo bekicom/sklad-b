@@ -4,20 +4,13 @@ const Store = require("../models/Store");
 const Client = require("../models/Client");
 const { io } = require("../index");
 const Agent = require("../models/Agent");
-// 🛒 Sotuv yaratish
-
-
 exports.createSale = async (req, res) => {
   try {
     let { customer, products, paid_amount, payment_method, shop_info } =
       req.body;
     paid_amount = Number(paid_amount) || 0;
-
-    // 🔑 Agentni token orqali olish
     const agentId = req.user?.agentId || req.user?._id || null;
     const isAgent = req.user?.role === "agent";
-
-    // Agent ma'lumotlarini olish (agar agent bo'lsa)
     let agentData = null;
     if (agentId && isAgent) {
       agentData = await Agent.findById(agentId).select("name phone location");
