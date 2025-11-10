@@ -350,7 +350,7 @@ exports.getSaleById = async (req, res) => {
   }
 };
 
-// 🧾 Faktura ma'lumotlari (print)
+
 exports.getInvoiceData = async (req, res) => {
   try {
     const sale = await Sale.findById(req.params.id)
@@ -360,27 +360,37 @@ exports.getInvoiceData = async (req, res) => {
 
     if (!sale) return res.status(404).json({ message: "Faktura topilmadi" });
 
-    // Agent ma'lumotlarini olish
+    // Agent ma'lumotlari
     const agentData = sale.agent_id || sale.agent_info;
     const isAgentSale = !!(agentData || sale.sale_type === "agent");
+
+    // 🧮 OLDINGI QARZNI TO‘G‘RI HISOBLASH
+    const previousSales = await Sale.find({
+      customer_id: sale.customer_id._id,
+      _id: { $ne: sale._id },
+      createdAt: { $lt: sale.createdAt }, // faqat hozirgidan oldingi sotuvlar
+      remaining_debt: { $gt: 0 },
+    });
+
+    const previousDebtTotal = previousSales.reduce(
+      (sum, s) => sum + (s.remaining_debt || 0),
+      0
+    );
 
     const invoiceData = {
       invoice_number:
         sale.invoice_number || `INV-${String(sale._id).slice(-8)}`,
       date: sale.createdAt,
-
       shop: sale.shop_info || {
         name: "MAZZALI",
         address: "Toshkent sh.",
         phone: "+998 94 732 44 44",
       },
-
       customer: {
         name: sale.customer_id?.name,
         phone: sale.customer_id?.phone,
         address: sale.customer_id?.address,
       },
-
       products: (sale.products || []).map((p) => ({
         name: p.name,
         model: p.model,
@@ -391,16 +401,15 @@ exports.getInvoiceData = async (req, res) => {
         currency: p.currency,
         partiya_number: p.partiya_number,
       })),
-
       payment: {
         total_amount: sale.total_amount,
         paid_amount: sale.paid_amount,
         remaining_debt: sale.remaining_debt,
+        previous_debt: previousDebtTotal, // ✅ endi to‘g‘ri chiqadi
+        total_debt: previousDebtTotal + sale.remaining_debt,
         payment_method: sale.payment_method,
         payment_status: sale.remaining_debt > 0 ? "qarz" : "to'liq to'langan",
       },
-
-      // Agent ma'lumotlarini qo'shish
       ...(isAgentSale && {
         agent_id: agentData,
         agent_info: sale.agent_info,
@@ -411,14 +420,10 @@ exports.getInvoiceData = async (req, res) => {
         isAgentSale: true,
         seller: "Agent",
       }),
-
-      // Agent bo'lmasa admin sotuvi
       ...(!isAgentSale && {
         seller: "Admin",
         isAgentSale: false,
       }),
-
-      // Qo'shimcha ma'lumotlar
       check_number: sale.check_number || String(sale._id).slice(-6),
     };
 
@@ -428,6 +433,8 @@ exports.getInvoiceData = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+
 
 
 
