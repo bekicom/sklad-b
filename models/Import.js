@@ -6,7 +6,7 @@ const productSchema = new mongoose.Schema(
   {
     product_name: { type: String, required: true, trim: true }, // Mahsulot nomi
     model: { type: String, trim: true }, // Model
-    unit: { type: String, enum: ["kg", "dona", "litr"], required: true }, // O'lchov
+    unit: { type: String, enum: ["kg", "dona", "blok"], required: true }, // O'lchov
     quantity: { type: Number, required: true, min: 0 }, // Miqdor
     unit_price: { type: Number, required: true, min: 0 }, // Xarid narxi (1 dona/kg)
     sell_price: { type: Number, required: true, min: 0 }, // Sotish narxi (1 dona/kg)

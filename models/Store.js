@@ -6,7 +6,7 @@ const storeSchema = new mongoose.Schema(
     // Mahsulot ma'lumotlari
     product_name: { type: String, required: true, trim: true }, // Mahsulot nomi
     model: { type: String, trim: true }, // Mahsulot modeli
-    unit: { type: String, enum: ["kg", "dona", "litr"], required: true }, // O'lchov birligi
+    unit: { type: String, enum: ["kg", "dona", "blok"], required: true }, // O'lchov birligi
     quantity: { type: Number, required: true, min: 0 }, // Miqdor (kg/dona/litr)
 
     purchase_price: { type: Number, required: true, min: 0 }, // Kelish narxi (1 dona/kg)
