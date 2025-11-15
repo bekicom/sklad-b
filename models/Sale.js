@@ -17,11 +17,13 @@ const saleSchema = new mongoose.Schema(
       ref: "Customer",
       required: true,
     },
+
     agent_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Agent", // qaysi agent sotgan
       required: false, // admin ham sotishi mumkin
     },
+
     products: [
       {
         product_id: {
@@ -31,14 +33,16 @@ const saleSchema = new mongoose.Schema(
         },
         name: String,
         model: String,
-        unit: String,
+        unit: { type: String, enum: ["kg", "dona", "blok", "karobka"] },
+        quantity: Number,
+        box_quantity: { type: Number, default: 0 },
         price: Number,
         purchase_price: Number,
-        quantity: Number,
         currency: String,
         partiya_number: Number,
       },
     ],
+
     total_amount: { type: Number, required: true, min: 0 },
     paid_amount: { type: Number, default: 0, min: 0 },
     remaining_debt: {
@@ -48,11 +52,13 @@ const saleSchema = new mongoose.Schema(
         return Math.max(this.total_amount - this.paid_amount, 0);
       },
     },
+
     payment_method: {
       type: String,
       enum: ["cash", "card", "qarz", "mixed"],
       default: "cash",
     },
+
     payment_history: [
       { amount: Number, date: { type: Date, default: Date.now } },
     ],
@@ -63,14 +69,15 @@ const saleSchema = new mongoose.Schema(
       address: { type: String, default: "Toshkent sh." },
       phone: { type: String, default: "+998 94 732 44 44" },
     },
-    // Sotuv holatini kuzatish
+
+    // Sotuv holati
     status: {
       type: String,
       enum: ["completed", "pending", "cancelled"],
       default: "completed",
     },
 
-    // 🔥 Pechat holatini kuzatish
+    // Pechat holati
     print_status: {
       type: String,
       enum: ["not_printed", "printed"],
@@ -78,14 +85,7 @@ const saleSchema = new mongoose.Schema(
     },
     printedAt: { type: Date },
 
-    // Sotuv holatini kuzatish
-    status: {
-      type: String,
-      enum: ["completed", "pending", "cancelled"],
-      default: "completed",
-    },
-
-    // Sotuv turi
+    // Sotuv turi: admin yoki agent
     sale_type: {
       type: String,
       enum: ["admin", "agent"],
@@ -119,30 +119,28 @@ const saleSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    // Virtual maydonlar uchun
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   }
 );
 
-// Virtual maydon - agent sotuvi ekanligini aniqlash
+// 🔹 Virtual maydonlar
 saleSchema.virtual("isAgentSale").get(function () {
   return !!this.agent_id;
 });
 
-// Virtual maydon - to'liq to'langan yoki yo'qligi
 saleSchema.virtual("isPaidFull").get(function () {
   return this.remaining_debt <= 0;
 });
 
-// Indexlar - tez qidiruv uchun
+// 🔹 Indexlar
 saleSchema.index({ agent_id: 1 });
 saleSchema.index({ createdAt: -1 });
 saleSchema.index({ invoice_number: 1 });
 saleSchema.index({ status: 1 });
 saleSchema.index({ sale_type: 1 });
 
-// Pre-save middleware - qarz va to'lov usulini hisoblash
+// 🔹 Pre-save middleware - qarz va to'lov usulini hisoblash
 saleSchema.pre("save", function (next) {
   // Qarzni qayta hisoblash
   this.remaining_debt = Math.max(this.total_amount - this.paid_amount, 0);

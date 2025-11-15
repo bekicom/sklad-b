@@ -6,8 +6,14 @@ const storeSchema = new mongoose.Schema(
     // Mahsulot ma'lumotlari
     product_name: { type: String, required: true, trim: true }, // Mahsulot nomi
     model: { type: String, trim: true }, // Mahsulot modeli
-    unit: { type: String, enum: ["kg", "dona", "blok"], required: true }, // O'lchov birligi
-    quantity: { type: Number, required: true, min: 0 }, // Miqdor (kg/dona/litr)
+    unit: {
+      type: String,
+      enum: ["kg", "dona", "blok", "karobka"],
+      required: true,
+    }, // O'lchov birligi
+    quantity: { type: Number, required: true, min: 0 }, // Miqdor (kg/dona/karobka)
+
+    box_quantity: { type: Number, default: 0, min: 0 }, // Karobka miqdori
 
     purchase_price: { type: Number, required: true, min: 0 }, // Kelish narxi (1 dona/kg)
     sell_price: { type: Number, required: true, min: 0 }, // Sotish narxi (1 dona/kg)
@@ -35,7 +41,7 @@ const storeSchema = new mongoose.Schema(
       required: true,
     },
 
-    note: { type: String, trim: true },
+    note: { type: String, trim: true }, // Qo'shimcha izoh
   },
   { timestamps: true }
 );

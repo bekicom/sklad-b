@@ -18,23 +18,20 @@ const createImport = async (req, res) => {
       note = "",
     } = req.body;
 
-    if (!client_name || !phone) {
+    if (!client_name || !phone)
       return res
         .status(400)
         .json({ message: "Mijoz nomi va telefon kiritilishi kerak" });
-    }
 
-    if (!Array.isArray(products) || products.length === 0) {
+    if (!Array.isArray(products) || products.length === 0)
       return res
         .status(400)
         .json({ message: "Kamida bitta mahsulot bo'lishi kerak" });
-    }
 
-    if (products.some((p) => p.currency === "USD") && usd_rate <= 0) {
+    if (products.some((p) => p.currency === "USD") && usd_rate <= 0)
       return res
         .status(400)
         .json({ message: "USD mahsulotlar uchun kurs kiritilishi kerak" });
-    }
 
     // Mijozni topish yoki yaratish
     let client = await Client.findOne({ phone: phone.trim() });
@@ -54,19 +51,11 @@ const createImport = async (req, res) => {
       ? Number(lastImport.partiya_number) + 1
       : 1;
 
-    const processedProducts = [];
     let totalImportPriceUZS = 0;
 
-    // Har bir mahsulot bo'yicha tekshiruv va hisoblash
-    for (let i = 0; i < products.length; i++) {
-      const p = products[i];
-
-      // ✅ TUZATILDI: product_name yoki title kelishiga qarab tekshirish
+    const processedProducts = products.map((p, i) => {
       const name = p.product_name || p.title;
-      if (!name?.trim()) {
-        throw new Error(`Mahsulot nomi bo'sh (${i + 1})`);
-      }
-
+      if (!name?.trim()) throw new Error(`Mahsulot nomi bo'sh (${i + 1})`);
       if (!p.unit?.trim())
         throw new Error(`O'lchov birligi ko'rsatilmagan (${i + 1})`);
       if (typeof p.quantity !== "number" || p.quantity <= 0)
@@ -82,42 +71,37 @@ const createImport = async (req, res) => {
 
       const priceUZS =
         p.currency === "USD" ? p.total_price * usd_rate : p.total_price;
-
       totalImportPriceUZS += priceUZS;
 
-      processedProducts.push({
-        // ✅ TUZATILDI: Import modelga mos ravishda product_name ishlatiladi
+      return {
         product_name: name.trim(),
-        model: p.model ? p.model.trim() : "",
+        model: p.model?.trim() || "",
         unit: p.unit.trim(),
         quantity: Number(p.quantity),
-        unit_price: Number(p.unit_price.toFixed(2)), // ✅ TUZATILDI: unit_price qo'shildi
+        box_quantity: Number(p.box_quantity || 0),
+        unit_price: Number(p.unit_price.toFixed(2)),
         total_price: Number(p.total_price.toFixed(2)),
         sell_price: Number(p.sell_price.toFixed(2)),
         currency: p.currency,
+        price_uzs: Number(priceUZS.toFixed(2)),
         paid_amount: 0,
         remaining_debt: 0,
-        price_uzs: Number(priceUZS.toFixed(2)),
-      });
-    }
+      };
+    });
 
     // Qarzdorlik va to'lovlarni hisoblash
     processedProducts.forEach((product) => {
-      if (totalImportPriceUZS > 0) {
-        const productShare = product.price_uzs / totalImportPriceUZS;
-        product.paid_amount = Number((productShare * paid_amount).toFixed(2));
-        product.remaining_debt = Number(
-          (product.price_uzs - product.paid_amount).toFixed(2)
-        );
-      } else {
-        product.paid_amount = 0;
-        product.remaining_debt = product.price_uzs;
-      }
+      const share =
+        totalImportPriceUZS > 0 ? product.price_uzs / totalImportPriceUZS : 0;
+      product.paid_amount = Number((share * paid_amount).toFixed(2));
+      product.remaining_debt = Number(
+        (product.price_uzs - product.paid_amount).toFixed(2)
+      );
     });
 
-    // ✅ TUZATILDI: supplier_id ishlatiladi (client emas)
+    // Import yaratish
     const newImport = await Import.create({
-      supplier_id: client._id, // ✅ supplier_id ishlatildi
+      supplier_id: client._id,
       usd_to_uzs_rate: Number(usd_rate),
       paid_amount: Number(paid_amount.toFixed(2)),
       partiya_number: nextPartiyaNumber,
@@ -135,7 +119,6 @@ const createImport = async (req, res) => {
     client.totalDebt = Number(
       ((client.totalDebt || 0) + totalRemainingDebt).toFixed(2)
     );
-
     if (paid_amount > 0) {
       if (!Array.isArray(client.paymentHistory)) client.paymentHistory = [];
       client.paymentHistory.push({
@@ -145,7 +128,6 @@ const createImport = async (req, res) => {
         import_id: newImport._id,
       });
     }
-
     await client.save();
 
     try {
@@ -154,7 +136,6 @@ const createImport = async (req, res) => {
       console.warn("Omborga qo'shishda ogohlantirish:", storeError.message);
     }
 
-    // ✅ TUZATILDI: supplier_id bo'yicha populate
     const populatedImport = await Import.findById(newImport._id).populate(
       "supplier_id",
       "name phone address totalDebt"
@@ -176,7 +157,6 @@ const createImport = async (req, res) => {
  */
 const getAllImports = async (req, res) => {
   try {
-    // ✅ TUZATILDI: supplier_id bo'yicha populate
     const imports = await Import.find().populate("supplier_id", "name phone");
     res.json(imports);
   } catch (error) {
@@ -194,11 +174,8 @@ const getImportById = async (req, res) => {
       "supplier_id",
       "name phone address totalDebt"
     );
-
-    if (!importItem) {
+    if (!importItem)
       return res.status(404).json({ message: "Import topilmadi" });
-    }
-
     res.json(importItem);
   } catch (error) {
     console.error("getImportById error:", error);
@@ -215,7 +192,7 @@ const getImportsGroupedByClient = async (req, res) => {
       {
         $lookup: {
           from: "clients",
-          localField: "supplier_id", // ✅ TUZATILDI: supplier_id ishlatildi
+          localField: "supplier_id",
           foreignField: "_id",
           as: "clientData",
         },
@@ -223,7 +200,7 @@ const getImportsGroupedByClient = async (req, res) => {
       { $unwind: "$clientData" },
       {
         $group: {
-          _id: "$supplier_id", // ✅ TUZATILDI: supplier_id ishlatildi
+          _id: "$supplier_id",
           client_name: { $first: "$clientData.name" },
           phone: { $first: "$clientData.phone" },
           total_debt: { $sum: "$remaining_debt" },
@@ -231,7 +208,6 @@ const getImportsGroupedByClient = async (req, res) => {
         },
       },
     ]);
-
     res.json(grouped);
   } catch (error) {
     console.error("getImportsGroupedByClient error:", error);
@@ -259,16 +235,25 @@ const updateImportPayment = async (req, res) => {
   try {
     const { amount } = req.body;
     const importItem = await Import.findById(req.params.id);
-
-    if (!importItem) {
+    if (!importItem)
       return res.status(404).json({ message: "Import topilmadi" });
-    }
 
     importItem.paid_amount += amount;
     importItem.remaining_debt -= amount;
 
-    await importItem.save();
+    // Mahsulotlar bo'yicha qarzni yangilash
+    const totalPriceUZS = importItem.products.reduce(
+      (sum, p) => sum + p.price_uzs,
+      0
+    );
+    importItem.products = importItem.products.map((p) => {
+      const share = p.price_uzs / totalPriceUZS;
+      p.paid_amount += Number((share * amount).toFixed(2));
+      p.remaining_debt = Number((p.price_uzs - p.paid_amount).toFixed(2));
+      return p;
+    });
 
+    await importItem.save();
     res.json({ message: "To'lov yangilandi", data: importItem });
   } catch (error) {
     console.error("updateImportPayment error:", error);
@@ -282,9 +267,7 @@ const updateImportPayment = async (req, res) => {
 const deleteImport = async (req, res) => {
   try {
     const deleted = await Import.findByIdAndDelete(req.params.id);
-    if (!deleted) {
-      return res.status(404).json({ message: "Import topilmadi" });
-    }
+    if (!deleted) return res.status(404).json({ message: "Import topilmadi" });
     res.json({ message: "Import o'chirildi" });
   } catch (error) {
     console.error("deleteImport error:", error);
