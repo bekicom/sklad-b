@@ -2,8 +2,8 @@ const mongoose = require("mongoose");
 
 const paymentSchema = new mongoose.Schema(
   {
-    amount: { type: Number, required: true }, // To‘langan summa
-    date: { type: Date, default: Date.now }, // To‘lov sanasi
+    amount: { type: Number, required: true }, // To'langan summa
+    date: { type: Date, default: Date.now }, // To'lov sanasi
     note: { type: String, default: "Qarz to'lovi" },
   },
   { _id: false }
@@ -48,7 +48,10 @@ const clientSchema = new mongoose.Schema(
     // 🔹 Importlar tarixi (history)
     importsHistory: [importHistorySchema],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    collection: "clients", // ✅ Collection nomini aniq belgilaymiz
+  }
 );
 
 // 🔹 Qarz va qolgan summani avtomatik hisoblash

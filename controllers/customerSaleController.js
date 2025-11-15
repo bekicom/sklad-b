@@ -157,21 +157,86 @@ exports.payCustomerDebt = async (req, res) => {
   }
 };
 
-
+// 💸 Mijoz qarzini oshirish
 exports.addCustomerDebt = async (req, res) => {
   try {
     const { id } = req.params;
     const { amount } = req.body;
-    console.log(id);
-    console.log(amount);
 
     const customer = await Customer.findByIdAndUpdate(id, {
       $inc: { totalDebt: amount },
     });
-    console.log(customer);
-    
+
     res.status(200).json({ message: "Qarz qo'shildi" });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+// 🗑️ Mijozni o'chirish (YANGI)
+exports.deleteCustomer = async (req, res) => {
+  try {
+    const mongoose = require("mongoose");
+    const customerId = req.params.id;
+
+    console.log("=== DELETE CUSTOMER BOSHLANDI ===");
+    console.log("O'chiriladigan customer ID:", customerId);
+
+    // ID formatini tekshirish
+    if (!customerId || customerId === "undefined" || customerId === "null") {
+      return res.status(400).json({ message: "Customer ID noto'g'ri" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({ message: "Customer ID formati noto'g'ri" });
+    }
+
+    // Customer mavjudligini tekshirish
+    const customer = await Customer.findById(customerId);
+
+    if (!customer) {
+      console.log("❌ Customer topilmadi:", customerId);
+      return res.status(404).json({ message: "Mijoz topilmadi" });
+    }
+
+    console.log("✅ Customer topildi:", customer.name);
+
+    // Customer bilan bog'liq sotuvlarni tekshirish
+    const salesCount = await Sale.countDocuments({ customer_id: customerId });
+    console.log("Bu customerga tegishli sotuvlar:", salesCount);
+
+    // Variant 1: Sotuvlarni ham o'chirish
+    if (salesCount > 0) {
+      await Sale.deleteMany({ customer_id: customerId });
+      console.log("✅ Sotuvlar ham o'chirildi");
+    }
+
+    // Variant 2: Yoki faqat customer_id ni null qilish (izohdan chiqaring agar kerak bo'lsa)
+    // if (salesCount > 0) {
+    //   await Sale.updateMany(
+    //     { customer_id: customerId },
+    //     { $set: { customer_id: null } }
+    //   );
+    //   console.log("✅ Sotuvlardan customer_id olib tashlandi");
+    // }
+
+    // Customerni o'chirish
+    await Customer.findByIdAndDelete(customerId);
+    console.log("✅ Customer o'chirildi:", customer.name);
+
+    res.status(200).json({
+      message: "Mijoz muvaffaqiyatli o'chirildi",
+      success: true,
+      deletedCustomer: {
+        id: customerId,
+        name: customer.name,
+      },
+    });
+  } catch (err) {
+    console.error("Customer o'chirish xatosi:", err);
+    res.status(500).json({
+      message: "Mijozni o'chirishda xatolik",
+      error: err.message,
+    });
   }
 };

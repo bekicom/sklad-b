@@ -100,6 +100,12 @@ router.put(
   au.verifyToken,
   customerSaleController.addCustomerDebt
 );
+// 🆕 Mijozni o'chirish
+router.delete(
+  "/customers/:id",
+  au.verifyToken,
+  customerSaleController.deleteCustomer
+);
 
 // ===================== EXPENSES =====================
 router.get(
