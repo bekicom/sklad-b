@@ -5,9 +5,10 @@ const Store = require("../models/Store");
 // 🛒 Dokonga sotuv yaratish
 exports.createCustomerSale = async (req, res) => {
   try {
-    const { customer, products, paid_amount, payment_method } = req.body;
+    const { customer, products, paid_amount = 0, payment_method } = req.body;
 
     let customerData;
+
     if (customer._id) {
       customerData = await Customer.findById(customer._id);
     } else {
@@ -15,9 +16,9 @@ exports.createCustomerSale = async (req, res) => {
         name: customer.name,
         phone: customer.phone,
         address: customer.address,
-        total_given: 0,
-        total_paid: 0,
-        total_debt: 0,
+        totalPurchased: 0,
+        totalPaid: 0,
+        totalDebt: 0,
       });
     }
 
@@ -28,30 +29,29 @@ exports.createCustomerSale = async (req, res) => {
       const product = await Store.findById(p.product_id);
       if (!product || product.quantity < p.quantity) {
         return res.status(400).json({
-          message: `${
-            product?.product_name || "Mahsulot"
-          } omborda yetarli emas`,
+          message: `${product?.product_name || "Mahsulot"} omborda yetarli emas`,
         });
       }
 
       product.quantity -= p.quantity;
       await product.save();
 
+      const price = p.price || product.sell_price;
+
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
         unit: product.unit,
-        price: p.price || product.sell_price,
-        purchase_price: product.unit_price,
+        price,
         quantity: p.quantity,
         currency: product.currency,
         partiya_number: product.partiya_number,
       });
 
-      total_amount += (p.price || product.sell_price) * p.quantity;
+      total_amount += price * p.quantity;
     }
 
-    const remaining_debt = total_amount - paid_amount;
+    const remaining_debt = Math.max(total_amount - paid_amount, 0);
 
     const sale = await Sale.create({
       customer_id: customerData._id,
@@ -60,14 +60,21 @@ exports.createCustomerSale = async (req, res) => {
       paid_amount,
       remaining_debt,
       payment_method,
-      paymentHistory:
+      payment_history:
         paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
     });
 
-    customerData.total_given += total_amount;
-    customerData.total_paid += paid_amount;
-    customerData.total_debt =
-      customerData.total_given - customerData.total_paid;
+    // ✅ BALANSNI TO‘G‘RI YANGILASH
+    customerData.totalPurchased =
+      (customerData.totalPurchased || 0) + total_amount;
+
+    customer.totalPaid = (customer.totalPaid || 0) + amount;
+
+    customer.totalDebt = Math.max(
+      (customer.totalPurchased || 0) - customer.totalPaid,
+      0,
+    );
+
     await customerData.save();
 
     res.json({ success: true, sale });
@@ -75,6 +82,10 @@ exports.createCustomerSale = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+
+
 
 // 📄 Barcha mijozlar
 exports.getAllCustomers = async (req, res) => {
@@ -179,8 +190,7 @@ exports.deleteCustomer = async (req, res) => {
     const mongoose = require("mongoose");
     const customerId = req.params.id;
 
-    console.log("=== DELETE CUSTOMER BOSHLANDI ===");
-    console.log("O'chiriladigan customer ID:", customerId);
+   
 
     // ID formatini tekshirish
     if (!customerId || customerId === "undefined" || customerId === "null") {
@@ -199,16 +209,13 @@ exports.deleteCustomer = async (req, res) => {
       return res.status(404).json({ message: "Mijoz topilmadi" });
     }
 
-    console.log("✅ Customer topildi:", customer.name);
 
     // Customer bilan bog'liq sotuvlarni tekshirish
     const salesCount = await Sale.countDocuments({ customer_id: customerId });
-    console.log("Bu customerga tegishli sotuvlar:", salesCount);
 
     // Variant 1: Sotuvlarni ham o'chirish
     if (salesCount > 0) {
       await Sale.deleteMany({ customer_id: customerId });
-      console.log("✅ Sotuvlar ham o'chirildi");
     }
 
     // Variant 2: Yoki faqat customer_id ni null qilish (izohdan chiqaring agar kerak bo'lsa)
@@ -222,7 +229,6 @@ exports.deleteCustomer = async (req, res) => {
 
     // Customerni o'chirish
     await Customer.findByIdAndDelete(customerId);
-    console.log("✅ Customer o'chirildi:", customer.name);
 
     res.status(200).json({
       message: "Mijoz muvaffaqiyatli o'chirildi",
@@ -238,5 +244,25 @@ exports.deleteCustomer = async (req, res) => {
       message: "Mijozni o'chirishda xatolik",
       error: err.message,
     });
+  }
+};
+
+// 📄 Barcha mijoz sotuvlari
+exports.getAllCustomerSales = async (req, res) => {
+  try {
+    const { customerId } = req.query; // ✅ customerId ni olamiz
+
+    const filter = {};
+    if (customerId) {
+      filter.customer_id = customerId; // ✅ Faqat shu mijozning sotuvlari
+    }
+
+    const sales = await Sale.find(filter)
+      .populate("customer_id")
+      .sort({ createdAt: -1 });
+
+    res.json(sales); // ✅ To'g'ridan array qaytarish (frontend shunday kutayapti)
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };

@@ -4,6 +4,8 @@ const Store = require("../models/Store");
 const Client = require("../models/Client");
 const { io } = require("../index");
 const Agent = require("../models/Agent");
+
+
 exports.createSale = async (req, res) => {
   try {
     let { customer, products, paid_amount, payment_method, shop_info } =
@@ -185,23 +187,13 @@ exports.createSale = async (req, res) => {
         agent_name: agentData?.name || "Admin",
       });
 
-      console.log(
-        `✅ Socket signal yuborildi: ${isAgent ? "Agent" : "Admin"} sotuv`
-      );
     } else {
       console.warn(
         "⚠️ Socket.io topilmadi, real-time bildirishnoma yuborilmadi"
       );
     }
 
-    // 9) Log yozish
-    console.log(`📊 Yangi sotuv yaratildi:`, {
-      invoice_number: sale.invoice_number,
-      customer: customerData.name,
-      agent: agentData?.name || "Admin",
-      total: total_amount,
-      products_count: saleProducts.length,
-    });
+
 
     return res.json({
       success: true,
@@ -358,39 +350,71 @@ exports.getInvoiceData = async (req, res) => {
       .populate("products.product_id")
       .populate("agent_id", "name phone location");
 
-    if (!sale) return res.status(404).json({ message: "Faktura topilmadi" });
+    if (!sale) {
+      return res.status(404).json({ message: "Faktura topilmadi" });
+    }
 
-    // Agent ma'lumotlari
-    const agentData = sale.agent_id || sale.agent_info;
-    const isAgentSale = !!(agentData || sale.sale_type === "agent");
+    const customer = await Customer.findById(sale.customer_id._id);
 
-    // 🧮 OLDINGI QARZNI TO‘G‘RI HISOBLASH
-    const previousSales = await Sale.find({
-      customer_id: sale.customer_id._id,
+    const allCustomerSales = await Sale.find({
+      customer_id: customer._id,
       _id: { $ne: sale._id },
-      createdAt: { $lt: sale.createdAt }, // faqat hozirgidan oldingi sotuvlar
-      remaining_debt: { $gt: 0 },
     });
 
-    const previousDebtTotal = previousSales.reduce(
-      (sum, s) => sum + (s.remaining_debt || 0),
-      0
-    );
+    // ✅ TO'LIQ LOG
+    console.log("\n========== INVOICE DEBUG START ==========");
+    console.log("📄 Joriy sotuv ID:", String(sale._id));
+    console.log("📄 Joriy sotuv invoice_number:", sale.invoice_number);
+    console.log("📄 Joriy total_amount:", sale.total_amount);
+    console.log("📄 Joriy paid_amount:", sale.paid_amount);
+    console.log("📄 Joriy remaining_debt:", sale.remaining_debt);
+    console.log("📄 Joriy payment_method:", sale.payment_method);
+    console.log("👤 Mijoz ID:", String(customer._id));
+    console.log("👤 Mijoz nomi:", customer.name);
+    console.log("👤 Mijoz totalDebt:", customer.totalDebt);
+    console.log("👤 Mijoz totalPaid:", customer.totalPaid);
+    console.log("👤 Mijoz totalPurchased:", customer.totalPurchased);
+    console.log("📦 Boshqa sotuvlar soni:", allCustomerSales.length);
+    allCustomerSales.forEach((s, i) => {
+      console.log(`  [${i + 1}] ID: ${String(s._id)}`);
+      console.log(`       invoice: ${s.invoice_number}`);
+      console.log(`       total_amount: ${s.total_amount}`);
+      console.log(`       paid_amount: ${s.paid_amount}`);
+      console.log(`       remaining_debt: ${s.remaining_debt}`);
+      console.log(`       payment_method: ${s.payment_method}`);
+    });
+
+    const previousDebt = allCustomerSales.reduce((sum, s) => {
+      return sum + Math.max(s.remaining_debt || 0, 0);
+    }, 0);
+
+    const totalDebt = previousDebt + (sale.remaining_debt || 0);
+
+    console.log("💰 Hisoblangan previousDebt:", previousDebt);
+    console.log("💰 Hisoblangan totalDebt:", totalDebt);
+    console.log("========== INVOICE DEBUG END ==========\n");
+    // ✅ LOG TUGADI
+
+    const agentData = sale.agent_id || sale.agent_info;
+    const isAgentSale = !!(agentData || sale.sale_type === "agent");
 
     const invoiceData = {
       invoice_number:
         sale.invoice_number || `INV-${String(sale._id).slice(-8)}`,
       date: sale.createdAt,
+
       shop: sale.shop_info || {
         name: "MAZZALI",
         address: "Toshkent sh.",
         phone: "+998 94 732 44 44",
       },
+
       customer: {
-        name: sale.customer_id?.name,
-        phone: sale.customer_id?.phone,
-        address: sale.customer_id?.address,
+        name: customer?.name,
+        phone: customer?.phone,
+        address: customer?.address,
       },
+
       products: (sale.products || []).map((p) => ({
         name: p.name,
         model: p.model,
@@ -401,15 +425,17 @@ exports.getInvoiceData = async (req, res) => {
         currency: p.currency,
         partiya_number: p.partiya_number,
       })),
+
       payment: {
         total_amount: sale.total_amount,
         paid_amount: sale.paid_amount,
         remaining_debt: sale.remaining_debt,
-        previous_debt: previousDebtTotal, // ✅ endi to‘g‘ri chiqadi
-        total_debt: previousDebtTotal + sale.remaining_debt,
+        previous_debt: previousDebt,
+        total_debt: totalDebt,
         payment_method: sale.payment_method,
         payment_status: sale.remaining_debt > 0 ? "qarz" : "to'liq to'langan",
       },
+
       ...(isAgentSale && {
         agent_id: agentData,
         agent_info: sale.agent_info,
@@ -420,16 +446,18 @@ exports.getInvoiceData = async (req, res) => {
         isAgentSale: true,
         seller: "Agent",
       }),
+
       ...(!isAgentSale && {
         seller: "Admin",
         isAgentSale: false,
       }),
+
       check_number: sale.check_number || String(sale._id).slice(-6),
     };
 
     return res.json({ success: true, invoice: invoiceData });
   } catch (err) {
-    console.error("getInvoiceData error:", err);
+    console.error("❌ getInvoiceData error:", err);
     return res.status(500).json({ message: err.message });
   }
 };
@@ -442,62 +470,50 @@ exports.getInvoiceData = async (req, res) => {
 // 💰 Qarz to'lash
 exports.payDebt = async (req, res) => {
   try {
-    const { amount, method } = req.body; // method qo‘shish foydali (naqd/karta)
+    const { amount } = req.body;
     const sale = await Sale.findById(req.params.id);
-    if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
 
-    const add = Number(amount) || 0;
-    if (add <= 0)
-      return res
-        .status(400)
-        .json({ message: "To'lov miqdori > 0 bo'lishi kerak" });
-    if (add > sale.remaining_debt) {
-      return res
-        .status(400)
-        .json({ message: "To'lov miqdori qarzdan oshmasligi kerak" });
+    if (!sale) {
+      return res.status(404).json({ message: "Sotuv topilmadi" });
     }
 
-    // To'lovni qo‘shish
+    const add = Number(amount) || 0;
+
     sale.paid_amount += add;
     sale.remaining_debt = Math.max(sale.total_amount - sale.paid_amount, 0);
 
-    sale.payment_history = sale.payment_history || [];
     sale.payment_history.push({
       amount: add,
       date: new Date(),
-      method: method || "cash",
     });
-
-    // ✅ To‘lov usuli aniqlash
-    if (sale.remaining_debt === 0) {
-      // qarz yopilgan → oxirgi to‘lov methodiga qarab belgilaymiz
-      sale.payment_method = method || sale.payment_method || "cash";
-    } else {
-      // qisman yopilgan
-      sale.payment_method = "mixed";
-    }
 
     await sale.save();
 
-    // ✅ Mijoz balansini yangilash
+    // 🔥 HAR DOIM Customer ni qayta hisoblaymiz
     const customer = await Customer.findById(sale.customer_id);
+
     if (customer) {
-      if (typeof customer.updateBalance === "function") {
-        await customer.updateBalance(0, add); // 0 = purchase qo‘shilmadi, add = to‘lov qo‘shildi
-      } else {
-        customer.totalPaid = (customer.totalPaid || 0) + add;
-        customer.totalDebt = Math.max(
-          (customer.totalPurchased || 0) - customer.totalPaid,
-          0
-        );
-        await customer.save();
-      }
+      const allSales = await Sale.find({
+        customer_id: customer._id,
+      });
+
+      const totalPurchased = allSales.reduce(
+        (sum, s) => sum + s.total_amount,
+        0,
+      );
+
+      const totalPaid = allSales.reduce((sum, s) => sum + s.paid_amount, 0);
+
+      customer.totalPurchased = totalPurchased;
+      customer.totalPaid = totalPaid;
+      customer.totalDebt = Math.max(totalPurchased - totalPaid, 0);
+
+      await customer.save();
     }
 
-    return res.json({ success: true, sale });
+    res.json({ success: true, sale });
   } catch (err) {
-    console.error("payDebt error:", err);
-    return res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
 
