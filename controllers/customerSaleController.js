@@ -1,170 +1,281 @@
+const mongoose = require("mongoose");
 const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
 const Store = require("../models/Store");
 
+const toNum = (v) => Number(v) || 0;
+
+async function recalcCustomerTotals(customerId) {
+  const allSales = await Sale.find({ customer_id: customerId }).select(
+    "total_amount paid_amount",
+  );
+
+  const totalPurchased = allSales.reduce(
+    (sum, s) => sum + toNum(s.total_amount),
+    0,
+  );
+  const totalPaid = allSales.reduce((sum, s) => sum + toNum(s.paid_amount), 0);
+  const totalDebt = Math.max(totalPurchased - totalPaid, 0);
+
+  const customer = await Customer.findById(customerId);
+  if (!customer) return null;
+
+  customer.totalPurchased = totalPurchased;
+  customer.totalPaid = totalPaid;
+  customer.totalDebt = totalDebt;
+  await customer.save();
+
+  return customer;
+}
+
 // 🛒 Dokonga sotuv yaratish
 exports.createCustomerSale = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { customer, products, paid_amount = 0, payment_method } = req.body;
+    let { customer, products, paid_amount = 0, payment_method } = req.body;
+    paid_amount = toNum(paid_amount);
+
+    if (!customer || (!customer._id && !customer.phone)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "Mijoz ma'lumoti to'liq emas" });
+    }
+
+    if (!Array.isArray(products) || products.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "Mahsulotlar bo'sh bo'lmasin" });
+    }
 
     let customerData;
-
     if (customer._id) {
-      customerData = await Customer.findById(customer._id);
+      customerData = await Customer.findById(customer._id).session(session);
+      if (!customerData) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({ message: "Mijoz topilmadi" });
+      }
     } else {
-      customerData = await Customer.create({
-        name: customer.name,
-        phone: customer.phone,
-        address: customer.address,
-        totalPurchased: 0,
-        totalPaid: 0,
-        totalDebt: 0,
-      });
+      if (!customer.name) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ message: "Mijoz nomi majburiy" });
+      }
+      customerData = await Customer.create(
+        [
+          {
+            name: customer.name,
+            phone: customer.phone || "",
+            address: customer.address || "",
+            totalPurchased: 0,
+            totalPaid: 0,
+            totalDebt: 0,
+          },
+        ],
+        { session },
+      );
+      customerData = customerData[0];
     }
 
     let total_amount = 0;
-    let saleProducts = [];
+    const saleProducts = [];
 
-    for (let p of products) {
-      const product = await Store.findById(p.product_id);
-      if (!product || product.quantity < p.quantity) {
+    for (const p of products) {
+      const qty = toNum(p.quantity);
+      if (qty <= 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ message: "Miqdor noto'g'ri" });
+      }
+
+      const product = await Store.findById(p.product_id).session(session);
+      if (!product || toNum(product.quantity) < qty) {
+        await session.abortTransaction();
+        session.endSession();
         return res.status(400).json({
           message: `${product?.product_name || "Mahsulot"} omborda yetarli emas`,
         });
       }
 
-      product.quantity -= p.quantity;
-      await product.save();
-
-      const price = p.price || product.sell_price;
+      const price = toNum(p.price) || toNum(product.sell_price);
+      product.quantity = toNum(product.quantity) - qty;
+      await product.save({ session });
 
       saleProducts.push({
         product_id: product._id,
         name: product.product_name,
+        model: product.model || "",
         unit: product.unit,
         price,
-        quantity: p.quantity,
+        quantity: qty,
         currency: product.currency,
         partiya_number: product.partiya_number,
       });
 
-      total_amount += price * p.quantity;
+      total_amount += price * qty;
     }
 
     const remaining_debt = Math.max(total_amount - paid_amount, 0);
 
-    const sale = await Sale.create({
-      customer_id: customerData._id,
-      products: saleProducts,
-      total_amount,
-      paid_amount,
-      remaining_debt,
-      payment_method,
-      payment_history:
-        paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
-    });
+    if (
+      !payment_method ||
+      !["cash", "card", "qarz", "mixed"].includes(payment_method)
+    ) {
+      payment_method =
+        remaining_debt > 0 ? (paid_amount > 0 ? "mixed" : "qarz") : "cash";
+    }
+    if (remaining_debt > 0 && paid_amount > 0) payment_method = "mixed";
+    if (remaining_debt > 0 && paid_amount === 0) payment_method = "qarz";
 
-    // ✅ BALANSNI TO‘G‘RI YANGILASH
-    customerData.totalPurchased =
-      (customerData.totalPurchased || 0) + total_amount;
-
-    customer.totalPaid = (customer.totalPaid || 0) + amount;
-
-    customer.totalDebt = Math.max(
-      (customer.totalPurchased || 0) - customer.totalPaid,
-      0,
+    const created = await Sale.create(
+      [
+        {
+          customer_id: customerData._id,
+          products: saleProducts,
+          total_amount,
+          paid_amount,
+          remaining_debt,
+          payment_method,
+          payment_history:
+            paid_amount > 0 ? [{ amount: paid_amount, date: new Date() }] : [],
+        },
+      ],
+      { session },
     );
 
-    await customerData.save();
+    const sale = created[0];
 
-    res.json({ success: true, sale });
+    customerData.totalPurchased =
+      toNum(customerData.totalPurchased) + total_amount;
+    customerData.totalPaid = toNum(customerData.totalPaid) + paid_amount;
+    customerData.totalDebt = Math.max(
+      toNum(customerData.totalPurchased) - toNum(customerData.totalPaid),
+      0,
+    );
+    await customerData.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({ success: true, sale, customer: customerData });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ message: err.message });
   }
 };
-
-
-
-
 
 // 📄 Barcha mijozlar
 exports.getAllCustomers = async (req, res) => {
   try {
-    const customers = await Customer.find();
-    res.status(200).json(customers);
+    const customers = await Customer.find().sort({ createdAt: -1 });
+    return res.status(200).json(customers);
   } catch (err) {
-    console.log(err.message);
-    return res.status(500).json({ message: "Serverda xatolik", err });
+    return res
+      .status(500)
+      .json({ message: "Serverda xatolik", error: err.message });
   }
 };
 
-// 📄 Barcha mijoz sotuvlari
+// 📄 Barcha mijoz sotuvlari (customerId optional)
 exports.getAllCustomerSales = async (req, res) => {
   try {
-    const sales = await Sale.find()
+    const { customerId } = req.query;
+    const filter = {};
+    if (customerId && mongoose.Types.ObjectId.isValid(customerId)) {
+      filter.customer_id = customerId;
+    }
+
+    const sales = await Sale.find(filter)
       .populate("customer_id")
       .sort({ createdAt: -1 });
-
-    res.json({ success: true, sales });
+    return res.json(sales);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
 // 📌 Qarzga olgan mijozlar
 exports.getCustomerDebtors = async (req, res) => {
   try {
-    const debtors = await Sale.find({ payment_method: "qarz" })
+    const debtors = await Sale.find({ remaining_debt: { $gt: 0 } })
       .populate("customer_id")
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, debtors });
+    return res.json({ success: true, debtors });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// 💰 Mijoz qarz to'lashi
+// 💰 Mijoz qarz to'lashi (FIFO: eng eski qarzdan boshlab)
 exports.payCustomerDebt = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { amount } = req.body;
-    const customer = await Customer.findById(req.params.id);
+    const add = toNum(req.body.amount);
+    if (add <= 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "To'lov summasi noto'g'ri" });
+    }
 
-    if (!customer) return res.status(404).json({ message: "Mijoz topilmadi" });
+    const customer = await Customer.findById(req.params.id).session(session);
+    if (!customer) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Mijoz topilmadi" });
+    }
 
-    const lastDebtSale = await Sale.findOne({
+    let left = add;
+    const debtSales = await Sale.find({
       customer_id: customer._id,
-      payment_method: "qarz",
-      $expr: { $lt: ["$paid_amount", "$total_amount"] },
-    }).sort({ createdAt: 1 });
+      remaining_debt: { $gt: 0 },
+    })
+      .sort({ createdAt: 1 })
+      .session(session);
 
-    if (!lastDebtSale) {
+    if (!debtSales.length) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: "Qarz sotuv topilmadi" });
     }
 
-    lastDebtSale.paid_amount += amount;
-    lastDebtSale.remaining_debt = Math.max(
-      lastDebtSale.total_amount - lastDebtSale.paid_amount,
-      0
-    );
+    for (const s of debtSales) {
+      if (left <= 0) break;
 
-    lastDebtSale.payment_history.push({
-      amount,
-      date: new Date(),
+      const debt = toNum(s.remaining_debt);
+      const pay = Math.min(left, debt);
+
+      s.paid_amount = toNum(s.paid_amount) + pay;
+      s.remaining_debt = Math.max(
+        toNum(s.total_amount) - toNum(s.paid_amount),
+        0,
+      );
+      s.payment_history.push({ amount: pay, date: new Date() });
+      await s.save({ session });
+
+      left -= pay;
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    const updatedCustomer = await recalcCustomerTotals(customer._id);
+
+    return res.json({
+      success: true,
+      paid: add - left,
+      extra_unapplied: left > 0 ? left : 0,
+      customer: updatedCustomer,
     });
-
-    await lastDebtSale.save();
-
-    customer.total_paid += amount;
-    customer.total_debt = Math.max(
-      customer.total_given - customer.total_paid,
-      0
-    );
-    await customer.save();
-
-    res.json({ success: true, sale: lastDebtSale, customer });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ message: err.message });
   }
 };
 
@@ -172,97 +283,54 @@ exports.payCustomerDebt = async (req, res) => {
 exports.addCustomerDebt = async (req, res) => {
   try {
     const { id } = req.params;
-    const { amount } = req.body;
+    const amount = toNum(req.body.amount);
 
-    const customer = await Customer.findByIdAndUpdate(id, {
-      $inc: { totalDebt: amount },
-    });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "ID formati noto'g'ri" });
+    }
+    if (amount <= 0) {
+      return res.status(400).json({ message: "Amount noto'g'ri" });
+    }
 
-    res.status(200).json({ message: "Qarz qo'shildi" });
+    const customer = await Customer.findById(id);
+    if (!customer) return res.status(404).json({ message: "Mijoz topilmadi" });
+
+    customer.totalDebt = toNum(customer.totalDebt) + amount;
+    await customer.save();
+
+    return res
+      .status(200)
+      .json({ success: true, message: "Qarz qo'shildi", customer });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
 
-// 🗑️ Mijozni o'chirish (YANGI)
+// 🗑️ Mijozni o'chirish
 exports.deleteCustomer = async (req, res) => {
   try {
-    const mongoose = require("mongoose");
     const customerId = req.params.id;
 
-   
-
-    // ID formatini tekshirish
-    if (!customerId || customerId === "undefined" || customerId === "null") {
+    if (!customerId || !mongoose.Types.ObjectId.isValid(customerId)) {
       return res.status(400).json({ message: "Customer ID noto'g'ri" });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(customerId)) {
-      return res.status(400).json({ message: "Customer ID formati noto'g'ri" });
-    }
-
-    // Customer mavjudligini tekshirish
     const customer = await Customer.findById(customerId);
+    if (!customer) return res.status(404).json({ message: "Mijoz topilmadi" });
 
-    if (!customer) {
-      console.log("❌ Customer topilmadi:", customerId);
-      return res.status(404).json({ message: "Mijoz topilmadi" });
-    }
-
-
-    // Customer bilan bog'liq sotuvlarni tekshirish
-    const salesCount = await Sale.countDocuments({ customer_id: customerId });
-
-    // Variant 1: Sotuvlarni ham o'chirish
-    if (salesCount > 0) {
-      await Sale.deleteMany({ customer_id: customerId });
-    }
-
-    // Variant 2: Yoki faqat customer_id ni null qilish (izohdan chiqaring agar kerak bo'lsa)
-    // if (salesCount > 0) {
-    //   await Sale.updateMany(
-    //     { customer_id: customerId },
-    //     { $set: { customer_id: null } }
-    //   );
-    //   console.log("✅ Sotuvlardan customer_id olib tashlandi");
-    // }
-
-    // Customerni o'chirish
+    await Sale.deleteMany({ customer_id: customerId });
     await Customer.findByIdAndDelete(customerId);
 
-    res.status(200).json({
-      message: "Mijoz muvaffaqiyatli o'chirildi",
+    return res.status(200).json({
       success: true,
-      deletedCustomer: {
-        id: customerId,
-        name: customer.name,
-      },
+      message: "Mijoz muvaffaqiyatli o'chirildi",
+      deletedCustomer: { id: customerId, name: customer.name },
     });
   } catch (err) {
-    console.error("Customer o'chirish xatosi:", err);
-    res.status(500).json({
+    return res.status(500).json({
+      success: false,
       message: "Mijozni o'chirishda xatolik",
       error: err.message,
     });
-  }
-};
-
-// 📄 Barcha mijoz sotuvlari
-exports.getAllCustomerSales = async (req, res) => {
-  try {
-    const { customerId } = req.query; // ✅ customerId ni olamiz
-
-    const filter = {};
-    if (customerId) {
-      filter.customer_id = customerId; // ✅ Faqat shu mijozning sotuvlari
-    }
-
-    const sales = await Sale.find(filter)
-      .populate("customer_id")
-      .sort({ createdAt: -1 });
-
-    res.json(sales); // ✅ To'g'ridan array qaytarish (frontend shunday kutayapti)
-  } catch (err) {
-    res.status(500).json({ message: err.message });
   }
 };
