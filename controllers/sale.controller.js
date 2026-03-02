@@ -5,6 +5,7 @@ const Client = require("../models/Client");
 const { io } = require("../index");
 const Agent = require("../models/Agent");
 
+const FINAL_STATUSES = ["completed", "approved"];
 
 exports.createSale = async (req, res) => {
   try {
@@ -64,9 +65,11 @@ exports.createSale = async (req, res) => {
       const qty = Number(p.quantity) || 0;
      const purchase_price = Number(product.purchase_price) || 0;
 
-      // Ombordan kamaytirish (AVTOMATIK)
-      product.quantity -= qty;
-      await product.save();
+      // Admin sotuvda darhol ombordan kamayadi, agent sotuv esa pending bo'ladi.
+      if (!isAgent) {
+        product.quantity -= qty;
+        await product.save();
+      }
 
       saleProducts.push({
         product_id: product._id,
@@ -124,7 +127,7 @@ exports.createSale = async (req, res) => {
         address: "Toshkent sh.",
         phone: "+998 94 732 44 44",
       },
-      status: "completed", // Agent sotuvi avtomatik completed
+      status: isAgent ? "pending" : "completed",
     };
 
     // Agent ma'lumotlarini qo'shish
@@ -142,17 +145,19 @@ exports.createSale = async (req, res) => {
 
     const sale = await Sale.create(saleData);
 
-    // 6) Mijoz balansini yangilash
-    if (typeof customerData.updateBalance === "function") {
-      await customerData.updateBalance(total_amount, paid_amount);
-    } else {
-      customerData.totalPurchased += total_amount;
-      customerData.totalPaid += paid_amount;
-      customerData.totalDebt = Math.max(
-        customerData.totalPurchased - customerData.totalPaid,
-        0
-      );
-      await customerData.save();
+    // 6) Mijoz balansini faqat yakunlangan sotuvlarda yangilaymiz
+    if (!isAgent) {
+      if (typeof customerData.updateBalance === "function") {
+        await customerData.updateBalance(total_amount, paid_amount);
+      } else {
+        customerData.totalPurchased += total_amount;
+        customerData.totalPaid += paid_amount;
+        customerData.totalDebt = Math.max(
+          customerData.totalPurchased - customerData.totalPaid,
+          0
+        );
+        await customerData.save();
+      }
     }
 
     // 7) Populate qilib, to'liq ma'lumot olish
@@ -200,14 +205,15 @@ exports.createSale = async (req, res) => {
       sale: populatedSale,
       customer: customerData,
       message: isAgent
-        ? "Agent sotuv muvaffaqiyatli amalga oshirildi"
+        ? "Agent sotuv pending holatda yaratildi, admin tasdiqlashi kerak"
         : "Sotuv muvaffaqiyatli amalga oshirildi",
     });
   } catch (err) {
     console.error("❌ createSale error:", err);
 
-    // Xatolik bo'lganda omborga qaytarish (rollback)
-    if (req.body.products && Array.isArray(req.body.products)) {
+    // Xatolik bo'lganda omborga qaytarish (faqat darhol kamaytirilgan admin sotuvlarda)
+    const isAgentRequest = req.user?.role === "agent";
+    if (!isAgentRequest && req.body.products && Array.isArray(req.body.products)) {
       try {
         for (const p of req.body.products) {
           const product = await Store.findById(p.product_id);
@@ -258,6 +264,37 @@ exports.getAllSales = async (req, res) => {
       .populate("customer_id", "name phone address")
       .sort({ createdAt: -1 });
 
+    // Har bir mijoz bo'yicha eng so'nggi to'lov izohini topamiz
+    const latestNoteByCustomer = new Map();
+    for (const sale of sales) {
+      const saleObj = sale.toObject();
+      const customerId = saleObj?.customer_id?._id
+        ? String(saleObj.customer_id._id)
+        : saleObj?.customer_id
+          ? String(saleObj.customer_id)
+          : null;
+      if (!customerId) continue;
+
+      const history = Array.isArray(saleObj.payment_history)
+        ? saleObj.payment_history
+        : [];
+      for (const h of history) {
+        const note =
+          h?.payment_note ||
+          h?.note ||
+          h?.izoh ||
+          h?.comment ||
+          h?.description ||
+          "";
+        if (!note) continue;
+        const at = new Date(h?.date || saleObj.updatedAt || saleObj.createdAt || 0);
+        const prev = latestNoteByCustomer.get(customerId);
+        if (!prev || at > prev.date) {
+          latestNoteByCustomer.set(customerId, { note, date: at });
+        }
+      }
+    }
+
     // Agent ma'lumotlarini qo'lda qo'shish (agar agent_info da saqlangan bo'lsa)
     const salesWithAgentInfo = sales.map((sale) => {
       const saleObj = sale.toObject();
@@ -280,6 +317,37 @@ exports.getAllSales = async (req, res) => {
           location: "",
         };
       }
+
+      const ownLatestHistory = Array.isArray(saleObj.payment_history)
+        ? [...saleObj.payment_history].sort(
+            (a, b) => new Date(b?.date || 0) - new Date(a?.date || 0)
+          )[0]
+        : null;
+
+      saleObj.latest_payment_note =
+        ownLatestHistory?.payment_note ||
+        ownLatestHistory?.note ||
+        ownLatestHistory?.izoh ||
+        ownLatestHistory?.comment ||
+        ownLatestHistory?.description ||
+        saleObj.notes ||
+        "";
+
+      const customerId = saleObj?.customer_id?._id
+        ? String(saleObj.customer_id._id)
+        : saleObj?.customer_id
+          ? String(saleObj.customer_id)
+          : null;
+      saleObj.customer_latest_payment_note = customerId
+        ? latestNoteByCustomer.get(customerId)?.note || ""
+        : "";
+
+      // Frontdan har doim bir xil field o'qish uchun
+      saleObj.note =
+        saleObj.latest_payment_note ||
+        saleObj.customer_latest_payment_note ||
+        saleObj.notes ||
+        "Qarz to'lovi";
 
       return saleObj;
     });
@@ -359,6 +427,8 @@ exports.getInvoiceData = async (req, res) => {
     const allCustomerSales = await Sale.find({
       customer_id: customer._id,
       _id: { $ne: sale._id },
+      status: { $in: FINAL_STATUSES },
+      createdAt: { $lt: sale.createdAt },
     });
 
     // ✅ TO'LIQ LOG
@@ -471,10 +541,28 @@ exports.getInvoiceData = async (req, res) => {
 exports.payDebt = async (req, res) => {
   try {
     const { amount } = req.body;
+    const rawNote =
+      req.body?.payment_note ??
+      req.body?.note ??
+      req.body?.izoh ??
+      req.body?.comment ??
+      req.body?.description ??
+      req.query?.note ??
+      req.headers["x-payment-note"];
+    const note =
+      typeof rawNote === "string" && rawNote.trim()
+        ? rawNote.trim()
+        : "Qarz to'lovi";
     const sale = await Sale.findById(req.params.id);
 
     if (!sale) {
       return res.status(404).json({ message: "Sotuv topilmadi" });
+    }
+
+    if (!FINAL_STATUSES.includes(sale.status)) {
+      return res.status(400).json({
+        message: "Faqat tasdiqlangan/yakunlangan sotuvlar uchun qarz to'lanadi",
+      });
     }
 
     const add = Number(amount) || 0;
@@ -485,7 +573,13 @@ exports.payDebt = async (req, res) => {
     sale.payment_history.push({
       amount: add,
       date: new Date(),
+      payment_note: note,
+      note,
+      izoh: note,
+      comment: note,
+      description: note,
     });
+    sale.notes = note;
 
     await sale.save();
 
@@ -495,6 +589,7 @@ exports.payDebt = async (req, res) => {
     if (customer) {
       const allSales = await Sale.find({
         customer_id: customer._id,
+        status: { $in: FINAL_STATUSES },
       });
 
       const totalPurchased = allSales.reduce(
@@ -520,7 +615,10 @@ exports.payDebt = async (req, res) => {
 // 📊 Qarzchilar ro'yxati
 exports.getDebtors = async (req, res) => {
   try {
-    const debtors = await Sale.find({ remaining_debt: { $gt: 0 } })
+    const debtors = await Sale.find({
+      remaining_debt: { $gt: 0 },
+      status: { $in: FINAL_STATUSES },
+    })
       .populate("customer_id")
       .populate("agent_id", "name phone")
       .sort({ createdAt: -1 });
@@ -732,6 +830,29 @@ exports.approveSale = async (req, res) => {
 
     sale.status = "approved";
     await sale.save();
+
+    // Pending bo'lgan agent sotuvi tasdiqlanganda mijoz balansiga qo'shamiz
+    const customer = await Customer.findById(sale.customer_id);
+    if (customer) {
+      const allSales = await Sale.find({
+        customer_id: customer._id,
+        status: { $in: FINAL_STATUSES },
+      }).select("total_amount paid_amount");
+
+      const totalPurchased = allSales.reduce(
+        (sum, s) => sum + (Number(s.total_amount) || 0),
+        0
+      );
+      const totalPaid = allSales.reduce(
+        (sum, s) => sum + (Number(s.paid_amount) || 0),
+        0
+      );
+
+      customer.totalPurchased = totalPurchased;
+      customer.totalPaid = totalPaid;
+      customer.totalDebt = Math.max(totalPurchased - totalPaid, 0);
+      await customer.save();
+    }
 
     res.json({ success: true, sale });
   } catch (err) {

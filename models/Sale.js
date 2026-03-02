@@ -60,7 +60,15 @@ const saleSchema = new mongoose.Schema(
     },
 
     payment_history: [
-      { amount: Number, date: { type: Date, default: Date.now } },
+      {
+        amount: Number,
+        date: { type: Date, default: Date.now },
+        payment_note: { type: String, default: "Qarz to'lovi" },
+        note: { type: String, default: "Qarz to'lovi" },
+        izoh: { type: String, default: "Qarz to'lovi" },
+        comment: { type: String, default: "Qarz to'lovi" },
+        description: { type: String, default: "Qarz to'lovi" },
+      },
     ],
 
     // Agent sotuvi uchun qo'shimcha maydonlar
@@ -73,7 +81,7 @@ const saleSchema = new mongoose.Schema(
     // Sotuv holati
     status: {
       type: String,
-      enum: ["completed", "pending", "cancelled"],
+      enum: ["completed", "pending", "approved", "cancelled"],
       default: "completed",
     },
 

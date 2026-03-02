@@ -4,6 +4,7 @@ const Customer = require("../models/Customer");
 const Store = require("../models/Store");
 
 const toNum = (v) => Number(v) || 0;
+const FINAL_STATUSES = ["completed", "approved"];
 
 async function recalcCustomerTotals(customerId) {
   const allSales = await Sale.find({ customer_id: customerId }).select(
@@ -217,10 +218,25 @@ exports.payCustomerDebt = async (req, res) => {
 
   try {
     const add = toNum(req.body.amount);
+    const rawNote =
+      req.body?.note ??
+      req.body?.izoh ??
+      req.body?.comment ??
+      req.body?.description ??
+      req.body?.payment_note ??
+      req.body?.payNote ??
+      req.query?.note ??
+      req.headers["x-payment-note"];
+    const note = typeof rawNote === "string" ? rawNote.trim() : "";
     if (add <= 0) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ message: "To'lov summasi noto'g'ri" });
+    }
+    if (!note) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: "Izoh kiritish majburiy" });
     }
 
     const customer = await Customer.findById(req.params.id).session(session);
@@ -231,9 +247,11 @@ exports.payCustomerDebt = async (req, res) => {
     }
 
     let left = add;
+    const appliedPayments = [];
     const debtSales = await Sale.find({
       customer_id: customer._id,
       remaining_debt: { $gt: 0 },
+      status: { $in: FINAL_STATUSES },
     })
       .sort({ createdAt: 1 })
       .session(session);
@@ -255,8 +273,25 @@ exports.payCustomerDebt = async (req, res) => {
         toNum(s.total_amount) - toNum(s.paid_amount),
         0,
       );
-      s.payment_history.push({ amount: pay, date: new Date() });
+      s.payment_history.push({
+        amount: pay,
+        date: new Date(),
+        payment_note: note,
+        note,
+        izoh: note,
+        comment: note,
+        description: note,
+      });
+      s.notes = note;
       await s.save({ session });
+
+      appliedPayments.push({
+        sale_id: s._id,
+        amount: pay,
+        payment_note: note,
+        note,
+        date: new Date(),
+      });
 
       left -= pay;
     }
@@ -270,6 +305,8 @@ exports.payCustomerDebt = async (req, res) => {
       success: true,
       paid: add - left,
       extra_unapplied: left > 0 ? left : 0,
+      note,
+      applied_payments: appliedPayments,
       customer: updatedCustomer,
     });
   } catch (err) {

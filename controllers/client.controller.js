@@ -75,7 +75,16 @@ exports.deleteClient = async (req, res) => {
 // 🔘 Qarz to'lash
 exports.payDebt = async (req, res) => {
   try {
-    const { amount, note } = req.body;
+    const { amount } = req.body;
+    const rawNote =
+      req.body?.note ??
+      req.body?.izoh ??
+      req.body?.comment ??
+      req.body?.description;
+    const note =
+      typeof rawNote === "string" && rawNote.trim()
+        ? rawNote.trim()
+        : "Qarz to'lovi";
     console.log(req.body);
 
     const client = await Client.findById(req.params.clientId);
@@ -92,7 +101,7 @@ exports.payDebt = async (req, res) => {
     client.paymentHistory.push({
       amount,
       date: new Date(),
-      note: note || "Qarz to'lovi",
+      note,
     });
 
     // Umumiy to‘langan summa va qolgan qarz
