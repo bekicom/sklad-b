@@ -261,7 +261,7 @@ exports.getAllSales = async (req, res) => {
 
     // Sotuvlarni olish (Agent model'siz, faqat ma'lumotlarni olish)
     const sales = await Sale.find(filter)
-      .populate("customer_id", "name phone address")
+      .populate("customer_id", "name phone address totalDebt totalPaid")
       .sort({ createdAt: -1 });
 
     // Har bir mijoz bo'yicha eng so'nggi to'lov izohini topamiz
@@ -870,7 +870,7 @@ exports.getSalesByAgent = async (req, res) => {
     }
 
     const sales = await Sale.find({ agent_id: agentId })
-      .populate("customer_id", "name phone address")
+      .populate("customer_id", "name phone address totalDebt totalPaid")
       .populate("agent_id", "name phone")
       .sort({ createdAt: -1 });
 
