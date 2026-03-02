@@ -9,7 +9,7 @@ const { Server } = require("socket.io");
 // 📌 .env faylni yuklash
 dotenv.config();
 
-// 📌 Express ilova
+
 const app = express();
 
 // 📌 Middlewarelar
