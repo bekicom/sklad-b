@@ -32,6 +32,9 @@ router.get("/agents", au.verifyToken, agentController.listAgents);
 // ✏️ Agent yangilash
 router.put("/agents/:id", au.verifyToken, agentController.updateAgent);
 
+// 🗑️ Agent o'chirish
+router.delete("/agents/:id", au.verifyToken, agentController.deleteAgent);
+
 // 🔑 Agent parolini yangilash
 router.patch(
   "/agents/:id/reset-password",

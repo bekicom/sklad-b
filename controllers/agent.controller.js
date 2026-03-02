@@ -125,6 +125,21 @@ exports.resetAgentPassword = async (req, res) => {
   }
 };
 
+// ADMIN: Agentni o'chirish
+exports.deleteAgent = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Agent.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Agent topilmadi" });
+
+    return res.json({ message: "Agent o'chirildi" });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: "Server xatosi", error: err.message });
+  }
+};
+
 // AGENT: Login (telefon app/webdan)
 // Body: { login, password }  -> JWT token qaytaradi
 // AGENT: Login
