@@ -6,6 +6,79 @@ const { io } = require("../index");
 const Agent = require("../models/Agent");
 
 const FINAL_STATUSES = ["completed", "approved"];
+const toNum = (value) => Number(value) || 0;
+
+async function reserveStoreQuantityForSaleItem(item, session) {
+  const requestedQty = toNum(item.quantity);
+  if (requestedQty <= 0) {
+    return {
+      success: false,
+      message: `${item?.name || "Mahsulot"} miqdori noto'g'ri`,
+    };
+  }
+
+  const exactProductId =
+    item?.product_id?._id || item?.product_id || item?.id || null;
+
+  const normalizedName = (item?.name || "").trim();
+  const normalizedModel = (item?.model || "").trim();
+  const normalizedUnit = item?.unit || null;
+
+  const orFilters = [];
+  if (exactProductId) {
+    orFilters.push({ _id: exactProductId });
+  }
+  if (normalizedName) {
+    const fallbackFilter = { product_name: normalizedName };
+    if (normalizedModel) fallbackFilter.model = normalizedModel;
+    if (normalizedUnit) fallbackFilter.unit = normalizedUnit;
+    orFilters.push(fallbackFilter);
+  }
+
+  if (orFilters.length === 0) {
+    return {
+      success: false,
+      message: `${item?.name || "Mahsulot"} uchun ombor yozuvi topilmadi`,
+    };
+  }
+
+  const storeItems = await Store.find({
+    quantity: { $gt: 0 },
+    $or: orFilters,
+  })
+    .sort({
+      _id: exactProductId ? -1 : 1,
+      createdAt: 1,
+    })
+    .session(session);
+
+  const totalAvailable = storeItems.reduce(
+    (sum, storeItem) => sum + toNum(storeItem.quantity),
+    0
+  );
+
+  if (totalAvailable < requestedQty) {
+    return {
+      success: false,
+      message: `Omborda ${item?.name || "mahsulot"} yetarli emas`,
+    };
+  }
+
+  let remainingQty = requestedQty;
+  for (const storeItem of storeItems) {
+    if (remainingQty <= 0) break;
+
+    const availableQty = toNum(storeItem.quantity);
+    if (availableQty <= 0) continue;
+
+    const deductedQty = Math.min(availableQty, remainingQty);
+    storeItem.quantity = availableQty - deductedQty;
+    await storeItem.save({ session });
+    remainingQty -= deductedQty;
+  }
+
+  return { success: true };
+}
 
 exports.createSale = async (req, res) => {
   try {
@@ -804,40 +877,49 @@ exports.getSalesStats = async (req, res) => {
 // controller
 // ✅ Admin tomonidan sotuvni tasdiqlash va chek chiqarish
 exports.approveSale = async (req, res) => {
+  const session = await Sale.startSession();
   try {
-    const sale = await Sale.findById(req.params.id).populate(
-      "products.product_id"
-    );
-    if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
+    session.startTransaction();
+
+    const sale = await Sale.findById(req.params.id)
+      .populate("products.product_id")
+      .session(session);
+    if (!sale) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: "Sotuv topilmadi" });
+    }
 
     if (sale.status !== "pending") {
+      await session.abortTransaction();
+      session.endSession();
       return res
         .status(400)
         .json({ message: "Bu sotuv allaqachon tasdiqlangan yoki yakunlangan" });
     }
 
-    // Ombordan mahsulotlarni kamaytirish
+    // Pending zakaz tasdiqlanganda mahsulotni umumiy mavjud qoldiq bo'yicha ayiramiz.
     for (let p of sale.products) {
-      const product = await Store.findById(p.product_id);
-      if (!product || product.quantity < p.quantity) {
-        return res
-          .status(400)
-          .json({ message: `Omborda ${p.name} yetarli emas` });
+      const inventoryResult = await reserveStoreQuantityForSaleItem(p, session);
+      if (!inventoryResult.success) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ message: inventoryResult.message });
       }
-      product.quantity -= p.quantity;
-      await product.save();
     }
 
     sale.status = "approved";
-    await sale.save();
+    await sale.save({ session });
 
     // Pending bo'lgan agent sotuvi tasdiqlanganda mijoz balansiga qo'shamiz
-    const customer = await Customer.findById(sale.customer_id);
+    const customer = await Customer.findById(sale.customer_id).session(session);
     if (customer) {
       const allSales = await Sale.find({
         customer_id: customer._id,
         status: { $in: FINAL_STATUSES },
-      }).select("total_amount paid_amount");
+      })
+        .select("total_amount paid_amount")
+        .session(session);
 
       const totalPurchased = allSales.reduce(
         (sum, s) => sum + (Number(s.total_amount) || 0),
@@ -851,11 +933,17 @@ exports.approveSale = async (req, res) => {
       customer.totalPurchased = totalPurchased;
       customer.totalPaid = totalPaid;
       customer.totalDebt = Math.max(totalPurchased - totalPaid, 0);
-      await customer.save();
+      await customer.save({ session });
     }
 
+    await session.commitTransaction();
+    session.endSession();
     res.json({ success: true, sale });
   } catch (err) {
+    try {
+      await session.abortTransaction();
+    } catch (_) {}
+    session.endSession();
     console.error("❌ approveSale error:", err);
     res.status(500).json({ message: err.message });
   }
