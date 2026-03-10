@@ -1,0 +1,863 @@
+
+> sklad-b@1.0.0 dev
+> nodemon index.js
+
+[33m[nodemon] 3.1.10[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node index.js`[39m
+[dotenv@17.2.1] injecting env (3) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+(node:24432) [MONGODB DRIVER] Warning: useNewUrlParser is a deprecated option: useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24432) [MONGODB DRIVER] Warning: useUnifiedTopology is a deprecated option: useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(node:24432) [MONGOOSE] Warning: Duplicate schema index on {"invoice_number":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:24432) Warning: Accessing non-existent property 'io' of module exports inside circular dependency
+(node:24432) [MONGOOSE] Warning: Duplicate schema index on {"phone":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:24432) [MONGOOSE] Warning: Duplicate schema index on {"login":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+🚀 Server 5000-portda ishlamoqda
+✅ MongoDB ulandi: ac-0khvg6o-shard-00-02.mj2dgxw.mongodb.net
+[0mPOST /api/login [32m200[0m 308.313 ms - 414[0m
+[0mGET /api/agents [32m200[0m 206.936 ms - 240[0m
+🟢 Client ulandi: ydpuGexVRCuMpCK6AAAC
+[0mGET /api/sales [32m200[0m 14434.507 ms - 4905937[0m
+🔴 Client chiqdi: ydpuGexVRCuMpCK6AAAC
+[0mGET /api/store [32m200[0m 5333.074 ms - 1040496[0m
+[0mGET /api/customers/all [32m200[0m 609.514 ms - 34347[0m
+[0mGET /api/customers/sales [32m200[0m 16078.568 ms - 4794336[0m
+[0mGET /api/imports/last-partiya [32m200[0m 201.579 ms - 25[0m
+[0mGET /api/clients [32m200[0m 413.141 ms - 46404[0m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node index.js`[39m
+[dotenv@17.2.1] injecting env (3) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+(node:11628) [MONGODB DRIVER] Warning: useNewUrlParser is a deprecated option: useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11628) [MONGODB DRIVER] Warning: useUnifiedTopology is a deprecated option: useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(node:11628) [MONGOOSE] Warning: Duplicate schema index on {"invoice_number":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:11628) Warning: Accessing non-existent property 'io' of module exports inside circular dependency
+(node:11628) [MONGOOSE] Warning: Duplicate schema index on {"phone":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:11628) [MONGOOSE] Warning: Duplicate schema index on {"login":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+🚀 Server 5000-portda ishlamoqda
+✅ MongoDB ulandi: ac-0khvg6o-shard-00-01.mj2dgxw.mongodb.net
+[0mGET /api/sales/stats?from=2026-02-08&to=2026-03-10 [32m200[0m 4636.147 ms - 17487[0m
+[0mGET /api/agents [36m304[0m 206.420 ms - -[0m
+🟢 Client ulandi: xhJ26_jFpuR-_oZEAAAC
+[0mGET /api/sales?saleType=agent&page=1&limit=15&agentId=697f405a6d79e28489ab94ef [32m200[0m 624.354 ms - 34038[0m
+
+========== INVOICE DEBUG START ==========
+📄 Joriy sotuv ID: 69afa34782099b35325e37c4
+📄 Joriy sotuv invoice_number: INV-20260310-007
+📄 Joriy total_amount: 182900
+📄 Joriy paid_amount: 182900
+📄 Joriy remaining_debt: 0
+📄 Joriy payment_method: cash
+👤 Mijoz ID: 68c28e7ec8e48969e7a38b9d
+👤 Mijoz nomi: NORIN 9
+👤 Mijoz totalDebt: 0
+👤 Mijoz totalPaid: 36952450
+👤 Mijoz totalPurchased: 36952450
+📦 Boshqa sotuvlar soni: 37
+  [1] ID: 69afa2c482099b35325cf866
+       invoice: INV-20260310-006
+       total_amount: 1445000
+       paid_amount: 1445000
+       remaining_debt: 0
+       payment_method: cash
+  [2] ID: 69a5246f208c30cfdbafa379
+       invoice: INV-20260302-007
+       total_amount: 1901500
+       paid_amount: 1901500
+       remaining_debt: 0
+       payment_method: cash
+  [3] ID: 699dbfb1f6ebb9e592797442
+       invoice: INV-20260224-032
+       total_amount: 803500
+       paid_amount: 803500
+       remaining_debt: 0
+       payment_method: cash
+  [4] ID: 69959c789ef69321aada7cb4
+       invoice: INV-20260218-015
+       total_amount: 1277500
+       paid_amount: 1277500
+       remaining_debt: 0
+       payment_method: cash
+  [5] ID: 698ed4579ef69321aab7f0d1
+       invoice: INV-20260213-017
+       total_amount: 1370000
+       paid_amount: 1370000
+       remaining_debt: 0
+       payment_method: cash
+  [6] ID: 698ae8829ef69321aaa1e6fa
+       invoice: INV-20260210-019
+       total_amount: 564500
+       paid_amount: 564500
+       remaining_debt: 0
+       payment_method: cash
+  [7] ID: 6985a1f29ef69321aa8319bd
+       invoice: INV-20260206-017
+       total_amount: 2904750
+       paid_amount: 2904750
+       remaining_debt: 0
+       payment_method: cash
+  [8] ID: 697b2cf86d79e284898e1e82
+       invoice: INV-20260129-018
+       total_amount: 692500
+       paid_amount: 692500
+       remaining_debt: 0
+       payment_method: cash
+  [9] ID: 696ded100f0241d5dbb01057
+       invoice: INV-20260119-013
+       total_amount: 1739000
+       paid_amount: 1739000
+       remaining_debt: 0
+       payment_method: cash
+  [10] ID: 6968abc50f0241d5db8e5454
+       invoice: INV-20260115-014
+       total_amount: 210000
+       paid_amount: 210000
+       remaining_debt: 0
+       payment_method: cash
+  [11] ID: 6964b3490f0241d5db65e3cc
+       invoice: INV-20260112-023
+       total_amount: 567100
+       paid_amount: 567100
+       remaining_debt: 0
+       payment_method: cash
+  [12] ID: 695e47390f0241d5db50deea
+       invoice: INV-20260107-018
+       total_amount: 1400000
+       paid_amount: 1400000
+       remaining_debt: 0
+       payment_method: cash
+  [13] ID: 69539d720f0241d5db402912
+       invoice: INV-20251230-015
+       total_amount: 1792000
+       paid_amount: 1792000
+       remaining_debt: 0
+       payment_method: cash
+  [14] ID: 694d02c71df6c5f3c50d79a4
+       invoice: INV-20251225-012
+       total_amount: 4727200
+       paid_amount: 4727200
+       remaining_debt: 0
+       payment_method: cash
+  [15] ID: 694905661df6c5f3c5ed680d
+       invoice: INV-20251222-017
+       total_amount: 360000
+       paid_amount: 360000
+       remaining_debt: 0
+       payment_method: cash
+  [16] ID: 694518a980ac81bcc9a8e690
+       invoice: INV-20251219-017
+       total_amount: 903500
+       paid_amount: 903500
+       remaining_debt: 0
+       payment_method: cash
+  [17] ID: 6941232380ac81bcc991ca29
+       invoice: INV-20251216-018
+       total_amount: 420000
+       paid_amount: 420000
+       remaining_debt: 0
+       payment_method: cash
+  [18] ID: 693bd58580ac81bcc97ae4b3
+       invoice: INV-20251212-016
+       total_amount: 180000
+       paid_amount: 180000
+       remaining_debt: 0
+       payment_method: cash
+  [19] ID: 6936882980ac81bcc95ca0a3
+       invoice: INV-20251208-028
+       total_amount: 1587200
+       paid_amount: 1587200
+       remaining_debt: 0
+       payment_method: cash
+  [20] ID: 693155a580ac81bcc93f3584
+       invoice: INV-20251204-022
+       total_amount: 487500
+       paid_amount: 487500
+       remaining_debt: 0
+       payment_method: cash
+  [21] ID: 692d48b749a14f4fda0354d3
+       invoice: INV-20251201-025
+       total_amount: 1141000
+       paid_amount: 1141000
+       remaining_debt: 0
+       payment_method: cash
+  [22] ID: 6926af3b49a14f4fdaf1a1bb
+       invoice: INV-20251126-013
+       total_amount: 1264000
+       paid_amount: 1264000
+       remaining_debt: 0
+       payment_method: cash
+  [23] ID: 6921630fb8d61b749af361fa
+       invoice: INV-20251122-022
+       total_amount: 1135000
+       paid_amount: 1135000
+       remaining_debt: 0
+       payment_method: cash
+  [24] ID: 691c2298b8d61b749ae062a3
+       invoice: INV-20251118-023
+       total_amount: 60000
+       paid_amount: 60000
+       remaining_debt: 0
+       payment_method: cash
+  [25] ID: 691c226cb8d61b749ae04c1f
+       invoice: INV-20251118-022
+       total_amount: 831000
+       paid_amount: 831000
+       remaining_debt: 0
+       payment_method: cash
+  [26] ID: 6916cfb626b6e9e7cb9a59ca
+       invoice: INV-20251114-015
+       total_amount: 122800
+       paid_amount: 122800
+       remaining_debt: 0
+       payment_method: cash
+  [27] ID: 6911a6d126b6e9e7cb7699e3
+       invoice: INV-20251110-022
+       total_amount: 1212000
+       paid_amount: 1212000
+       remaining_debt: 0
+       payment_method: cash
+  [28] ID: 6901e2a4a6aa980a1b04dbf0
+       invoice: INV-20251029-019
+       total_amount: 466000
+       paid_amount: 466000
+       remaining_debt: 0
+       payment_method: cash
+  [29] ID: 68f8878f4612a6a6b5fb62d3
+       invoice: INV-20251022-017
+       total_amount: 300000
+       paid_amount: 300000
+       remaining_debt: 0
+       payment_method: cash
+  [30] ID: 68f086cec28a18791a5ba3cb
+       invoice: INV-20251016-016
+       total_amount: 674000
+       paid_amount: 674000
+       remaining_debt: 0
+       payment_method: cash
+  [31] ID: 68e4b568c28a18791a58dca7
+       invoice: INV-20251007-017
+       total_amount: 1462000
+       paid_amount: 1462000
+       remaining_debt: 0
+       payment_method: cash
+  [32] ID: 68dfe106c28a18791a57e6b1
+       invoice: INV-20251003-026
+       total_amount: 200000
+       paid_amount: 200000
+       remaining_debt: 0
+       payment_method: cash
+  [33] ID: 68dfe0aec28a18791a57e6a0
+       invoice: INV-20251003-025
+       total_amount: 522000
+       paid_amount: 522000
+       remaining_debt: 0
+       payment_method: cash
+  [34] ID: 68da2897c28a18791a54c473
+       invoice: INV-20250929-015
+       total_amount: 300000
+       paid_amount: 300000
+       remaining_debt: 0
+       payment_method: cash
+  [35] ID: 68d670aec28a18791a539fa3
+       invoice: INV-20250926-017
+       total_amount: 635000
+       paid_amount: 635000
+       remaining_debt: 0
+       payment_method: cash
+  [36] ID: 68d108eb3459beadf46c5773
+       invoice: INV-20250922-012
+       total_amount: 912000
+       paid_amount: 912000
+       remaining_debt: 0
+       payment_method: cash
+  [37] ID: 68c28e7fc8e48969e7a38ba2
+       invoice: INV-20250911-019
+       total_amount: 200000
+       paid_amount: 200000
+       remaining_debt: 0
+       payment_method: cash
+💰 Hisoblangan previousDebt: 0
+💰 Hisoblangan totalDebt: 0
+========== INVOICE DEBUG END ==========
+
+[0mGET /api/sales/69afa34782099b35325e37c4/invoice [32m200[0m 1303.622 ms - 1177[0m
+[0mPATCH /api/sales/69afa34782099b35325e37c4/print [32m200[0m 241.542 ms - 1772[0m
+[0mGET /api/customers/sales?customerId=[object%20Object] [0m-[0m - ms - -[0m
+[0mGET /api/sales?saleType=agent&page=1&limit=15&agentId=697f405a6d79e28489ab94ef [0m-[0m - ms - -[0m
+[0mGET /api/sales?saleType=agent&page=1&limit=15&agentId=697f405a6d79e28489ab94ef [0m-[0m - ms - -[0m
+[0mGET /api/sales/69afa34782099b35325e37c4/invoice [0m-[0m - ms - -[0m
+🔴 Client chiqdi: xhJ26_jFpuR-_oZEAAAC
+🟢 Client ulandi: mJsPzYYFhpUS9Sk4AAAF
+[0mGET /api/sales?saleType=agent&page=1&limit=15&agentId=697f405a6d79e28489ab94ef [32m200[0m 604.172 ms - 34038[0m
+
+========== INVOICE DEBUG START ==========
+📄 Joriy sotuv ID: 69afa34782099b35325e37c4
+📄 Joriy sotuv invoice_number: INV-20260310-007
+📄 Joriy total_amount: 182900
+📄 Joriy paid_amount: 182900
+📄 Joriy remaining_debt: 0
+📄 Joriy payment_method: cash
+👤 Mijoz ID: 68c28e7ec8e48969e7a38b9d
+👤 Mijoz nomi: NORIN 9
+👤 Mijoz totalDebt: 0
+👤 Mijoz totalPaid: 36952450
+👤 Mijoz totalPurchased: 36952450
+📦 Boshqa sotuvlar soni: 37
+  [1] ID: 69afa2c482099b35325cf866
+       invoice: INV-20260310-006
+       total_amount: 1445000
+       paid_amount: 1445000
+       remaining_debt: 0
+       payment_method: cash
+  [2] ID: 69a5246f208c30cfdbafa379
+       invoice: INV-20260302-007
+       total_amount: 1901500
+       paid_amount: 1901500
+       remaining_debt: 0
+       payment_method: cash
+  [3] ID: 699dbfb1f6ebb9e592797442
+       invoice: INV-20260224-032
+       total_amount: 803500
+       paid_amount: 803500
+       remaining_debt: 0
+       payment_method: cash
+  [4] ID: 69959c789ef69321aada7cb4
+       invoice: INV-20260218-015
+       total_amount: 1277500
+       paid_amount: 1277500
+       remaining_debt: 0
+       payment_method: cash
+  [5] ID: 698ed4579ef69321aab7f0d1
+       invoice: INV-20260213-017
+       total_amount: 1370000
+       paid_amount: 1370000
+       remaining_debt: 0
+       payment_method: cash
+  [6] ID: 698ae8829ef69321aaa1e6fa
+       invoice: INV-20260210-019
+       total_amount: 564500
+       paid_amount: 564500
+       remaining_debt: 0
+       payment_method: cash
+  [7] ID: 6985a1f29ef69321aa8319bd
+       invoice: INV-20260206-017
+       total_amount: 2904750
+       paid_amount: 2904750
+       remaining_debt: 0
+       payment_method: cash
+  [8] ID: 697b2cf86d79e284898e1e82
+       invoice: INV-20260129-018
+       total_amount: 692500
+       paid_amount: 692500
+       remaining_debt: 0
+       payment_method: cash
+  [9] ID: 696ded100f0241d5dbb01057
+       invoice: INV-20260119-013
+       total_amount: 1739000
+       paid_amount: 1739000
+       remaining_debt: 0
+       payment_method: cash
+  [10] ID: 6968abc50f0241d5db8e5454
+       invoice: INV-20260115-014
+       total_amount: 210000
+       paid_amount: 210000
+       remaining_debt: 0
+       payment_method: cash
+  [11] ID: 6964b3490f0241d5db65e3cc
+       invoice: INV-20260112-023
+       total_amount: 567100
+       paid_amount: 567100
+       remaining_debt: 0
+       payment_method: cash
+  [12] ID: 695e47390f0241d5db50deea
+       invoice: INV-20260107-018
+       total_amount: 1400000
+       paid_amount: 1400000
+       remaining_debt: 0
+       payment_method: cash
+  [13] ID: 69539d720f0241d5db402912
+       invoice: INV-20251230-015
+       total_amount: 1792000
+       paid_amount: 1792000
+       remaining_debt: 0
+       payment_method: cash
+  [14] ID: 694d02c71df6c5f3c50d79a4
+       invoice: INV-20251225-012
+       total_amount: 4727200
+       paid_amount: 4727200
+       remaining_debt: 0
+       payment_method: cash
+  [15] ID: 694905661df6c5f3c5ed680d
+       invoice: INV-20251222-017
+       total_amount: 360000
+       paid_amount: 360000
+       remaining_debt: 0
+       payment_method: cash
+  [16] ID: 694518a980ac81bcc9a8e690
+       invoice: INV-20251219-017
+       total_amount: 903500
+       paid_amount: 903500
+       remaining_debt: 0
+       payment_method: cash
+  [17] ID: 6941232380ac81bcc991ca29
+       invoice: INV-20251216-018
+       total_amount: 420000
+       paid_amount: 420000
+       remaining_debt: 0
+       payment_method: cash
+  [18] ID: 693bd58580ac81bcc97ae4b3
+       invoice: INV-20251212-016
+       total_amount: 180000
+       paid_amount: 180000
+       remaining_debt: 0
+       payment_method: cash
+  [19] ID: 6936882980ac81bcc95ca0a3
+       invoice: INV-20251208-028
+       total_amount: 1587200
+       paid_amount: 1587200
+       remaining_debt: 0
+       payment_method: cash
+  [20] ID: 693155a580ac81bcc93f3584
+       invoice: INV-20251204-022
+       total_amount: 487500
+       paid_amount: 487500
+       remaining_debt: 0
+       payment_method: cash
+  [21] ID: 692d48b749a14f4fda0354d3
+       invoice: INV-20251201-025
+       total_amount: 1141000
+       paid_amount: 1141000
+       remaining_debt: 0
+       payment_method: cash
+  [22] ID: 6926af3b49a14f4fdaf1a1bb
+       invoice: INV-20251126-013
+       total_amount: 1264000
+       paid_amount: 1264000
+       remaining_debt: 0
+       payment_method: cash
+  [23] ID: 6921630fb8d61b749af361fa
+       invoice: INV-20251122-022
+       total_amount: 1135000
+       paid_amount: 1135000
+       remaining_debt: 0
+       payment_method: cash
+  [24] ID: 691c2298b8d61b749ae062a3
+       invoice: INV-20251118-023
+       total_amount: 60000
+       paid_amount: 60000
+       remaining_debt: 0
+       payment_method: cash
+  [25] ID: 691c226cb8d61b749ae04c1f
+       invoice: INV-20251118-022
+       total_amount: 831000
+       paid_amount: 831000
+       remaining_debt: 0
+       payment_method: cash
+  [26] ID: 6916cfb626b6e9e7cb9a59ca
+       invoice: INV-20251114-015
+       total_amount: 122800
+       paid_amount: 122800
+       remaining_debt: 0
+       payment_method: cash
+  [27] ID: 6911a6d126b6e9e7cb7699e3
+       invoice: INV-20251110-022
+       total_amount: 1212000
+       paid_amount: 1212000
+       remaining_debt: 0
+       payment_method: cash
+  [28] ID: 6901e2a4a6aa980a1b04dbf0
+       invoice: INV-20251029-019
+       total_amount: 466000
+       paid_amount: 466000
+       remaining_debt: 0
+       payment_method: cash
+  [29] ID: 68f8878f4612a6a6b5fb62d3
+       invoice: INV-20251022-017
+       total_amount: 300000
+       paid_amount: 300000
+       remaining_debt: 0
+       payment_method: cash
+  [30] ID: 68f086cec28a18791a5ba3cb
+       invoice: INV-20251016-016
+       total_amount: 674000
+       paid_amount: 674000
+       remaining_debt: 0
+       payment_method: cash
+  [31] ID: 68e4b568c28a18791a58dca7
+       invoice: INV-20251007-017
+       total_amount: 1462000
+       paid_amount: 1462000
+       remaining_debt: 0
+       payment_method: cash
+  [32] ID: 68dfe106c28a18791a57e6b1
+       invoice: INV-20251003-026
+       total_amount: 200000
+       paid_amount: 200000
+       remaining_debt: 0
+       payment_method: cash
+  [33] ID: 68dfe0aec28a18791a57e6a0
+       invoice: INV-20251003-025
+       total_amount: 522000
+       paid_amount: 522000
+       remaining_debt: 0
+       payment_method: cash
+  [34] ID: 68da2897c28a18791a54c473
+       invoice: INV-20250929-015
+       total_amount: 300000
+       paid_amount: 300000
+       remaining_debt: 0
+       payment_method: cash
+  [35] ID: 68d670aec28a18791a539fa3
+       invoice: INV-20250926-017
+       total_amount: 635000
+       paid_amount: 635000
+       remaining_debt: 0
+       payment_method: cash
+  [36] ID: 68d108eb3459beadf46c5773
+       invoice: INV-20250922-012
+       total_amount: 912000
+       paid_amount: 912000
+       remaining_debt: 0
+       payment_method: cash
+  [37] ID: 68c28e7fc8e48969e7a38ba2
+       invoice: INV-20250911-019
+       total_amount: 200000
+       paid_amount: 200000
+       remaining_debt: 0
+       payment_method: cash
+💰 Hisoblangan previousDebt: 0
+💰 Hisoblangan totalDebt: 0
+========== INVOICE DEBUG END ==========
+
+🔴 Client chiqdi: mJsPzYYFhpUS9Sk4AAAF
+🟢 Client ulandi: d7x9J-u20Q1BwkzqAAAH
+🔴 Client chiqdi: d7x9J-u20Q1BwkzqAAAH
+🟢 Client ulandi: kOyM3LrYJnq_tEY9AAAJ
+🔴 Client chiqdi: kOyM3LrYJnq_tEY9AAAJ
+[0mGET /api/clients [36m304[0m 423.651 ms - -[0m
+[0mGET /api/clienthistory/68adc8b691d2ffa9260fe2ed [32m200[0m 1634.329 ms - 169061[0m
+[0mGET /api/agents [36m304[0m 199.939 ms - -[0m
+🟢 Client ulandi: RtZIetIWH-6UVTxeAAAM
+[0mGET /api/sales?saleType=agent&page=1&limit=15&agentId=697f405a6d79e28489ab94ef [36m304[0m 610.384 ms - -[0m
+[0mGET /api/sales?saleType=agent&page=4&limit=15&agentId=697f405a6d79e28489ab94ef [32m200[0m 611.492 ms - 36298[0m
+[0mGET /api/sales?saleType=agent&page=5&limit=15&agentId=697f405a6d79e28489ab94ef [32m200[0m 603.150 ms - 30084[0m
+
+========== INVOICE DEBUG START ==========
+📄 Joriy sotuv ID: 699d4eedf6ebb9e5926e3445
+📄 Joriy sotuv invoice_number: INV-20260224-018
+📄 Joriy total_amount: 1058000
+📄 Joriy paid_amount: 1058000
+📄 Joriy remaining_debt: 0
+📄 Joriy payment_method: cash
+👤 Mijoz ID: 68c2736bc8e48969e7a388eb
+👤 Mijoz nomi: JIYDAKAPA 10
+👤 Mijoz totalDebt: 0
+👤 Mijoz totalPaid: 72589800
+👤 Mijoz totalPurchased: 72589800
+📦 Boshqa sotuvlar soni: 46
+  [1] ID: 69957c639ef69321aad25640
+       invoice: INV-20260218-007
+       total_amount: 200000
+       paid_amount: 200000
+       remaining_debt: 0
+       payment_method: cash
+  [2] ID: 698ebbff9ef69321aab4bbf3
+       invoice: INV-20260213-009
+       total_amount: 1936000
+       paid_amount: 1936000
+       remaining_debt: 0
+       payment_method: cash
+  [3] ID: 698ac68a9ef69321aa9e0f72
+       invoice: INV-20260210-008
+       total_amount: 60000
+       paid_amount: 60000
+       remaining_debt: 0
+       payment_method: cash
+  [4] ID: 698ac5f89ef69321aa9ce09c
+       invoice: INV-20260210-007
+       total_amount: 3639200
+       paid_amount: 3639200
+       remaining_debt: 0
+       payment_method: cash
+  [5] ID: 6985d1099ef69321aa8c2a4b
+       invoice: INV-20260206-028
+       total_amount: 1813000
+       paid_amount: 1813000
+       remaining_debt: 0
+       payment_method: cash
+  [6] ID: 698047dd6d79e28489b76e05
+       invoice: INV-20260202-014
+       total_amount: 1728600
+       paid_amount: 1728600
+       remaining_debt: 0
+       payment_method: cash
+  [7] ID: 697afe7f6d79e2848987bfc7
+       invoice: INV-20260129-008
+       total_amount: 2844500
+       paid_amount: 2844500
+       remaining_debt: 0
+       payment_method: cash
+  [8] ID: 6971c7836d79e2848931a6b5
+       invoice: INV-20260122-004
+       total_amount: 1543000
+       paid_amount: 1543000
+       remaining_debt: 0
+       payment_method: cash
+  [9] ID: 696dcf3a0f0241d5dba9c1ff
+       invoice: INV-20260119-005
+       total_amount: 1162000
+       paid_amount: 1162000
+       remaining_debt: 0
+       payment_method: cash
+  [10] ID: 696889010f0241d5db8cf0ad
+       invoice: INV-20260115-008
+       total_amount: 465000
+       paid_amount: 465000
+       remaining_debt: 0
+       payment_method: cash
+  [11] ID: 6964c3610f0241d5db699d11
+       invoice: INV-20260112-028
+       total_amount: 360000
+       paid_amount: 360000
+       remaining_debt: 0
+       payment_method: cash
+  [12] ID: 696495160f0241d5db61ac6f
+       invoice: INV-20260112-016
+       total_amount: 2531000
+       paid_amount: 2531000
+       remaining_debt: 0
+       payment_method: cash
+  [13] ID: 695e40010f0241d5db4db157
+       invoice: INV-20260107-013
+       total_amount: 1280500
+       paid_amount: 1280500
+       remaining_debt: 0
+       payment_method: cash
+  [14] ID: 69521dc50f0241d5db2e9163
+       invoice: INV-20251229-007
+       total_amount: 4280000
+       paid_amount: 4280000
+       remaining_debt: 0
+       payment_method: cash
+  [15] ID: 694cf0e41df6c5f3c50aecc9
+       invoice: INV-20251225-006
+       total_amount: 2695000
+       paid_amount: 2695000
+       remaining_debt: 0
+       payment_method: cash
+  [16] ID: 6948e0621df6c5f3c5e9829f
+       invoice: INV-20251222-007
+       total_amount: 2644500
+       paid_amount: 2644500
+       remaining_debt: 0
+       payment_method: cash
+  [17] ID: 6944eb9f80ac81bcc9a7946d
+       invoice: INV-20251219-009
+       total_amount: 1295000
+       paid_amount: 1295000
+       remaining_debt: 0
+       payment_method: cash
+  [18] ID: 6940fb1580ac81bcc98e7b4e
+       invoice: INV-20251216-009
+       total_amount: 1181000
+       paid_amount: 1181000
+       remaining_debt: 0
+       payment_method: cash
+  [19] ID: 693bfcbb80ac81bcc97fd69d
+       invoice: INV-20251212-021
+       total_amount: 360000
+       paid_amount: 360000
+       remaining_debt: 0
+       payment_method: cash
+  [20] ID: 693ba4cb80ac81bcc977b1eb
+       invoice: INV-20251212-002
+       total_amount: 1929500
+       paid_amount: 1929500
+       remaining_debt: 0
+       payment_method: cash
+  [21] ID: 6936aa0b80ac81bcc961a9aa
+       invoice: INV-20251208-036
+       total_amount: 1765400
+       paid_amount: 1765400
+       remaining_debt: 0
+       payment_method: cash
+  [22] ID: 6931370680ac81bcc93be7dd
+       invoice: INV-20251204-011
+       total_amount: 900000
+       paid_amount: 900000
+       remaining_debt: 0
+       payment_method: cash
+  [23] ID: 692d301849a14f4fda01a366
+       invoice: INV-20251201-018
+       total_amount: 1431200
+       paid_amount: 1431200
+       remaining_debt: 0
+       payment_method: cash
+  [24] ID: 692697de49a14f4fdaf0dd7b
+       invoice: INV-20251126-008
+       total_amount: 917100
+       paid_amount: 917100
+       remaining_debt: 0
+       payment_method: cash
+  [25] ID: 69214e71b8d61b749af27b2d
+       invoice: INV-20251122-014
+       total_amount: 1694500
+       paid_amount: 1694500
+       remaining_debt: 0
+       payment_method: cash
+  [26] ID: 691c0dcbb8d61b749adf996b
+       invoice: INV-20251118-014
+       total_amount: 1035600
+       paid_amount: 1035600
+       remaining_debt: 0
+       payment_method: cash
+  [27] ID: 6916bac626b6e9e7cb9926c8
+       invoice: INV-20251114-007
+       total_amount: 1120000
+       paid_amount: 1120000
+       remaining_debt: 0
+       payment_method: cash
+  [28] ID: 69118ab126b6e9e7cb75761f
+       invoice: INV-20251110-015
+       total_amount: 1610000
+       paid_amount: 1610000
+       remaining_debt: 0
+       payment_method: cash
+  [29] ID: 690c8b92a6aa980a1b1645fb
+       invoice: INV-20251106-025
+       total_amount: 450000
+       paid_amount: 450000
+       remaining_debt: 0
+       payment_method: cash
+  [30] ID: 6908666ea6aa980a1b09c454
+       invoice: INV-20251103-019
+       total_amount: 65000
+       paid_amount: 65000
+       remaining_debt: 0
+       payment_method: cash
+  [31] ID: 69086570a6aa980a1b09c437
+       invoice: INV-20251103-018
+       total_amount: 3763000
+       paid_amount: 3763000
+       remaining_debt: 0
+       payment_method: cash
+  [32] ID: 6901cff3a6aa980a1b0335a2
+       invoice: INV-20251029-012
+       total_amount: 40000
+       paid_amount: 40000
+       remaining_debt: 0
+       payment_method: cash
+  [33] ID: 6901cfb3a6aa980a1b033585
+       invoice: INV-20251029-011
+       total_amount: 792700
+       paid_amount: 792700
+       remaining_debt: 0
+       payment_method: cash
+  [34] ID: 6901ceb3a6aa980a1b033568
+       invoice: INV-20251029-010
+       total_amount: 200000
+       paid_amount: 200000
+       remaining_debt: 0
+       payment_method: cash
+  [35] ID: 68fc732fa6aa980a1b005932
+       invoice: INV-20251025-016
+       total_amount: 3356800
+       paid_amount: 3356800
+       remaining_debt: 0
+       payment_method: cash
+  [36] ID: 68f870994612a6a6b5fb5e49
+       invoice: INV-20251022-011
+       total_amount: 415800
+       paid_amount: 415800
+       remaining_debt: 0
+       payment_method: cash
+  [37] ID: 68f61cbf88fba754db489672
+       invoice: INV-20251020-004
+       total_amount: 3750000
+       paid_amount: 3750000
+       remaining_debt: 0
+       payment_method: cash
+  [38] ID: 68e4a69cc28a18791a58dbcc
+       invoice: INV-20251007-010
+       total_amount: 4450000
+       paid_amount: 4450000
+       remaining_debt: 0
+       payment_method: cash
+  [39] ID: 68dfc45ac28a18791a57b616
+       invoice: INV-20251003-017
+       total_amount: 187500
+       paid_amount: 187500
+       remaining_debt: 0
+       payment_method: cash
+  [40] ID: 68dfaeafc28a18791a57ad8c
+       invoice: INV-20251003-016
+       total_amount: 600000
+       paid_amount: 600000
+       remaining_debt: 0
+       payment_method: cash
+  [41] ID: 68da90e6c28a18791a55fc9a
+       invoice: INV-20250929-027
+       total_amount: 792900
+       paid_amount: 792900
+       remaining_debt: 0
+       payment_method: cash
+  [42] ID: 68d186603459beadf46d642a
+       invoice: INV-20250922-030
+       total_amount: 387500
+       paid_amount: 387500
+       remaining_debt: 0
+       payment_method: cash
+  [43] ID: 68cd55f73459beadf46bb25d
+       invoice: INV-20250919-029
+       total_amount: 715000
+       paid_amount: 715000
+       remaining_debt: 0
+       payment_method: cash
+  [44] ID: 68c82c123459beadf467d517
+       invoice: INV-20250915-016
+       total_amount: 460000
+       paid_amount: 460000
+       remaining_debt: 0
+       payment_method: cash
+  [45] ID: 68c82aec3459beadf467d4cd
+       invoice: INV-20250915-015
+       total_amount: 2368000
+       paid_amount: 2368000
+       remaining_debt: 0
+       payment_method: cash
+  [46] ID: 68c2736cc8e48969e7a388f0
+       invoice: INV-20250911-010
+       total_amount: 800000
+       paid_amount: 800000
+       remaining_debt: 0
+       payment_method: cash
+💰 Hisoblangan previousDebt: 0
+💰 Hisoblangan totalDebt: 0
+========== INVOICE DEBUG END ==========
+
+[0mGET /api/sales/699d4eedf6ebb9e5926e3445/invoice [32m200[0m 1284.882 ms - 1706[0m
+[0mPATCH /api/sales/699d4eedf6ebb9e5926e3445/print [32m200[0m 219.033 ms - 2824[0m
+[0mGET /api/sales?saleType=agent&page=5&limit=15&agentId=697f405a6d79e28489ab94ef [32m200[0m 593.386 ms - 30084[0m
+🔴 Client chiqdi: RtZIetIWH-6UVTxeAAAM
+[0mGET /api/customers/sales?customerId=[object%20Object] [32m200[0m 12238.177 ms - 4794336[0m
+[0mGET /api/clients [36m304[0m 422.247 ms - -[0m
+[0mGET /api/clienthistory/68adc8b691d2ffa9260fe2ed [36m304[0m 1895.874 ms - -[0m
+[0mGET /api/store [36m304[0m 5107.760 ms - -[0m
+[0mGET /api/customers/all [36m304[0m 600.644 ms - -[0m
+[0mGET /api/customers/sales [32m200[0m 12747.023 ms - 4794336[0m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node index.js`[39m
+[dotenv@17.2.1] injecting env (3) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+(node:16460) [MONGODB DRIVER] Warning: useNewUrlParser is a deprecated option: useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16460) [MONGODB DRIVER] Warning: useUnifiedTopology is a deprecated option: useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
+(node:16460) [MONGOOSE] Warning: Duplicate schema index on {"invoice_number":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:16460) Warning: Accessing non-existent property 'io' of module exports inside circular dependency
+(node:16460) [MONGOOSE] Warning: Duplicate schema index on {"phone":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:16460) [MONGOOSE] Warning: Duplicate schema index on {"login":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+🚀 Server 5000-portda ishlamoqda
+✅ MongoDB ulandi: ac-0khvg6o-shard-00-02.mj2dgxw.mongodb.net
+[0mGET /api/store [32m200[0m 4192.305 ms - 1024159[0m

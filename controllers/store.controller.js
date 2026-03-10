@@ -6,9 +6,22 @@ const Store = require("../models/Store");
  */
 const getAllStoreItems = async (req, res) => {
   try {
-    const storeItems = await Store.find()
-      .populate("supplier_id", "name phone")
-      .sort({ createdAt: -1 });
+    const isSaleView = req.query.view === "sale";
+    const query = isSaleView ? { quantity: { $gt: 0 } } : {};
+    const selectFields = isSaleView
+      ? "_id product_name model unit quantity sell_price purchase_price currency partiya_number createdAt"
+      : undefined;
+
+    let storeQuery = Store.find(query);
+
+    if (selectFields) {
+      storeQuery = storeQuery.select(selectFields);
+    } else {
+      storeQuery = storeQuery.populate("supplier_id", "name phone");
+    }
+
+    // _id sort uses built-in index and is usually faster than createdAt sort.
+    const storeItems = await storeQuery.sort({ _id: -1 }).lean();
 
     res.status(200).json(storeItems);
   } catch (error) {

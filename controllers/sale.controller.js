@@ -318,10 +318,13 @@ exports.createSale = async (req, res) => {
 exports.getAllSales = async (req, res) => {
   try {
     const filter = {};
-    const { agentId, from, to } = req.query;
+    const { agentId, from, to, saleType, page, limit } = req.query;
 
     // Agent ID bo'yicha filtr
     if (agentId) filter.agent_id = agentId;
+    if (saleType === "agent" || saleType === "admin") {
+      filter.sale_type = saleType;
+    }
 
     // Sana bo'yicha filtr
     if (from && to && !isNaN(new Date(from)) && !isNaN(new Date(to))) {
@@ -332,24 +335,39 @@ exports.getAllSales = async (req, res) => {
       filter.createdAt = { $gte: startDate, $lte: endDate };
     }
 
-    // Sotuvlarni olish (Agent model'siz, faqat ma'lumotlarni olish)
-    const sales = await Sale.find(filter)
+    const parsedPage = Number.parseInt(page, 10);
+    const parsedLimit = Number.parseInt(limit, 10);
+    const usePagination = Number.isInteger(parsedPage) && Number.isInteger(parsedLimit) && parsedPage > 0 && parsedLimit > 0;
+    const currentPage = usePagination ? parsedPage : 1;
+    const pageSize = usePagination ? Math.min(parsedLimit, 100) : 0;
+    const skip = usePagination ? (currentPage - 1) * pageSize : 0;
+
+    let salesQuery = Sale.find(filter)
       .populate("customer_id", "name phone address totalDebt totalPaid")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (usePagination) {
+      salesQuery = salesQuery.skip(skip).limit(pageSize);
+    }
+
+    const [sales, totalCount] = await Promise.all([
+      salesQuery,
+      usePagination ? Sale.countDocuments(filter) : Promise.resolve(0),
+    ]);
 
     // Har bir mijoz bo'yicha eng so'nggi to'lov izohini topamiz
     const latestNoteByCustomer = new Map();
     for (const sale of sales) {
-      const saleObj = sale.toObject();
-      const customerId = saleObj?.customer_id?._id
-        ? String(saleObj.customer_id._id)
-        : saleObj?.customer_id
-          ? String(saleObj.customer_id)
+      const customerId = sale?.customer_id?._id
+        ? String(sale.customer_id._id)
+        : sale?.customer_id
+          ? String(sale.customer_id)
           : null;
       if (!customerId) continue;
 
-      const history = Array.isArray(saleObj.payment_history)
-        ? saleObj.payment_history
+      const history = Array.isArray(sale.payment_history)
+        ? sale.payment_history
         : [];
       for (const h of history) {
         const note =
@@ -360,7 +378,7 @@ exports.getAllSales = async (req, res) => {
           h?.description ||
           "";
         if (!note) continue;
-        const at = new Date(h?.date || saleObj.updatedAt || saleObj.createdAt || 0);
+        const at = new Date(h?.date || sale.updatedAt || sale.createdAt || 0);
         const prev = latestNoteByCustomer.get(customerId);
         if (!prev || at > prev.date) {
           latestNoteByCustomer.set(customerId, { note, date: at });
@@ -370,7 +388,7 @@ exports.getAllSales = async (req, res) => {
 
     // Agent ma'lumotlarini qo'lda qo'shish (agar agent_info da saqlangan bo'lsa)
     const salesWithAgentInfo = sales.map((sale) => {
-      const saleObj = sale.toObject();
+      const saleObj = { ...sale };
 
       // Agent ma'lumotini turli joylardan olish
       if (saleObj.agent_info) {
@@ -392,9 +410,12 @@ exports.getAllSales = async (req, res) => {
       }
 
       const ownLatestHistory = Array.isArray(saleObj.payment_history)
-        ? [...saleObj.payment_history].sort(
-            (a, b) => new Date(b?.date || 0) - new Date(a?.date || 0)
-          )[0]
+        ? saleObj.payment_history.reduce((latest, curr) => {
+            if (!latest) return curr;
+            return new Date(curr?.date || 0) > new Date(latest?.date || 0)
+              ? curr
+              : latest;
+          }, null)
         : null;
 
       saleObj.latest_payment_note =
@@ -425,14 +446,26 @@ exports.getAllSales = async (req, res) => {
       return saleObj;
     });
 
-    return res.json({
+    const response = {
       success: true,
       sales: salesWithAgentInfo,
       count: salesWithAgentInfo.length,
+      totalCount: usePagination ? totalCount : salesWithAgentInfo.length,
       agentCount: salesWithAgentInfo.filter(
         (s) => s.sale_type === "agent" || s.agent_id
       ).length,
-    });
+    };
+
+    if (usePagination) {
+      response.pagination = {
+        page: currentPage,
+        limit: pageSize,
+        total: totalCount,
+        totalPages: Math.max(Math.ceil(totalCount / pageSize), 1),
+      };
+    }
+
+    return res.json(response);
   } catch (err) {
     console.error("❌ getAllSales error:", err);
     return res.status(500).json({
@@ -952,7 +985,7 @@ exports.approveSale = async (req, res) => {
 // 📌 Admin: Bitta agent sotuvlari
 exports.getSalesByAgent = async (req, res) => {
   try {
-    const { agentId } = req.params;
+    const agentId = req.params.agentId || req.params.id;
     if (!agentId) {
       return res.status(400).json({ message: "Agent ID kiritilmadi" });
     }
