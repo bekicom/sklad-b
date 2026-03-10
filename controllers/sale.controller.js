@@ -138,11 +138,9 @@ exports.createSale = async (req, res) => {
       const qty = Number(p.quantity) || 0;
      const purchase_price = Number(product.purchase_price) || 0;
 
-      // Admin sotuvda darhol ombordan kamayadi, agent sotuv esa pending bo'ladi.
-      if (!isAgent) {
-        product.quantity -= qty;
-        await product.save();
-      }
+      // Har qanday sotuvda (admin/agent) darhol ombordan kamayadi.
+      product.quantity -= qty;
+      await product.save();
 
       saleProducts.push({
         product_id: product._id,
@@ -200,7 +198,7 @@ exports.createSale = async (req, res) => {
         address: "Toshkent sh.",
         phone: "+998 94 732 44 44",
       },
-      status: isAgent ? "pending" : "completed",
+      status: "completed",
     };
 
     // Agent ma'lumotlarini qo'shish
@@ -277,16 +275,13 @@ exports.createSale = async (req, res) => {
       success: true,
       sale: populatedSale,
       customer: customerData,
-      message: isAgent
-        ? "Agent sotuv pending holatda yaratildi, admin tasdiqlashi kerak"
-        : "Sotuv muvaffaqiyatli amalga oshirildi",
+      message: "Sotuv muvaffaqiyatli amalga oshirildi",
     });
   } catch (err) {
     console.error("❌ createSale error:", err);
 
-    // Xatolik bo'lganda omborga qaytarish (faqat darhol kamaytirilgan admin sotuvlarda)
-    const isAgentRequest = req.user?.role === "agent";
-    if (!isAgentRequest && req.body.products && Array.isArray(req.body.products)) {
+    // Xatolik bo'lganda omborga qaytarish (admin/agent ikkalasi uchun ham)
+    if (req.body.products && Array.isArray(req.body.products)) {
       try {
         for (const p of req.body.products) {
           const product = await Store.findById(p.product_id);
