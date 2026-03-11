@@ -8,6 +8,51 @@ const Agent = require("../models/Agent");
 const FINAL_STATUSES = ["completed", "approved"];
 const toNum = (value) => Number(value) || 0;
 
+async function restoreStoreQuantityFromSaleItems(products = [], session = null) {
+  for (const p of products) {
+    const productId = p?.product_id?._id || p?.product_id;
+    if (!productId) continue;
+    const qty = Number(p?.quantity) || 0;
+    if (qty <= 0) continue;
+
+    const storeItem = session
+      ? await Store.findById(productId).session(session)
+      : await Store.findById(productId);
+    if (!storeItem) continue;
+
+    storeItem.quantity = (Number(storeItem.quantity) || 0) + qty;
+    await storeItem.save(session ? { session } : undefined);
+  }
+}
+
+async function recalcCustomerTotals(customerId, session = null) {
+  if (!customerId) return;
+  const customer = session
+    ? await Customer.findById(customerId).session(session)
+    : await Customer.findById(customerId);
+  if (!customer) return;
+
+  const salesQuery = Sale.find({
+    customer_id: customer._id,
+    status: { $in: FINAL_STATUSES },
+  }).select("total_amount paid_amount");
+  const allSales = session ? await salesQuery.session(session) : await salesQuery;
+
+  const totalPurchased = allSales.reduce(
+    (sum, s) => sum + (Number(s.total_amount) || 0),
+    0
+  );
+  const totalPaid = allSales.reduce(
+    (sum, s) => sum + (Number(s.paid_amount) || 0),
+    0
+  );
+
+  customer.totalPurchased = totalPurchased;
+  customer.totalPaid = totalPaid;
+  customer.totalDebt = Math.max(totalPurchased - totalPaid, 0);
+  await customer.save(session ? { session } : undefined);
+}
+
 async function reserveStoreQuantityForSaleItem(item, session) {
   const requestedQty = toNum(item.quantity);
   if (requestedQty <= 0) {
@@ -216,19 +261,17 @@ exports.createSale = async (req, res) => {
 
     const sale = await Sale.create(saleData);
 
-    // 6) Mijoz balansini faqat yakunlangan sotuvlarda yangilaymiz
-    if (!isAgent) {
-      if (typeof customerData.updateBalance === "function") {
-        await customerData.updateBalance(total_amount, paid_amount);
-      } else {
-        customerData.totalPurchased += total_amount;
-        customerData.totalPaid += paid_amount;
-        customerData.totalDebt = Math.max(
-          customerData.totalPurchased - customerData.totalPaid,
-          0
-        );
-        await customerData.save();
-      }
+    // 6) Mijoz balansini yangilash
+    if (typeof customerData.updateBalance === "function") {
+      await customerData.updateBalance(total_amount, paid_amount);
+    } else {
+      customerData.totalPurchased += total_amount;
+      customerData.totalPaid += paid_amount;
+      customerData.totalDebt = Math.max(
+        customerData.totalPurchased - customerData.totalPaid,
+        0
+      );
+      await customerData.save();
     }
 
     // 7) Populate qilib, to'liq ma'lumot olish
@@ -313,12 +356,15 @@ exports.createSale = async (req, res) => {
 exports.getAllSales = async (req, res) => {
   try {
     const filter = {};
-    const { agentId, from, to, saleType, page, limit } = req.query;
+    const { agentId, from, to, saleType, page, limit, includeCancelled } = req.query;
 
     // Agent ID bo'yicha filtr
     if (agentId) filter.agent_id = agentId;
     if (saleType === "agent" || saleType === "admin") {
       filter.sale_type = saleType;
+    }
+    if (includeCancelled !== "true") {
+      filter.status = { $ne: "cancelled" };
     }
 
     // Sana bo'yicha filtr
@@ -761,11 +807,53 @@ exports.updateSale = async (req, res) => {
 // 🗑️ O'chirish
 exports.deleteSale = async (req, res) => {
   try {
-    const sale = await Sale.findByIdAndDelete(req.params.id);
+    const sale = await Sale.findById(req.params.id);
     if (!sale) return res.status(404).json({ message: "Sotuv topilmadi" });
+
+    const shouldRestoreStore = FINAL_STATUSES.includes(sale.status);
+    if (shouldRestoreStore) {
+      await restoreStoreQuantityFromSaleItems(sale.products || []);
+    }
+
+    await Sale.findByIdAndDelete(req.params.id);
+
+    if (sale.customer_id) {
+      await recalcCustomerTotals(sale.customer_id);
+    }
+
     return res.json({ success: true, message: "Sotuv o'chirildi" });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+};
+
+// ❌ Sotuvni bekor qilish (admin uchun)
+exports.cancelSale = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sale = await Sale.findById(id);
+    if (!sale) {
+      return res.status(404).json({ success: false, message: "Sotuv topilmadi" });
+    }
+
+    if (sale.status === "cancelled") {
+      return res.json({ success: true, sale, message: "Sotuv oldin bekor qilingan" });
+    }
+
+    if (FINAL_STATUSES.includes(sale.status)) {
+      await restoreStoreQuantityFromSaleItems(sale.products || []);
+    }
+
+    sale.status = "cancelled";
+    await sale.save();
+
+    if (sale.customer_id) {
+      await recalcCustomerTotals(sale.customer_id);
+    }
+
+    return res.json({ success: true, sale, message: "Sotuv bekor qilindi" });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
