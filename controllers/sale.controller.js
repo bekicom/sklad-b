@@ -874,7 +874,7 @@ exports.getSalesStats = async (req, res) => {
       .populate({ path: "products.product_id", select: "purchase_price unit" })
       .populate("customer_id");
 
-    const clients = await Client.find().select("paymentHistory");
+    const clients = await Client.find().select("paymentHistory totalDebt");
 
     const stats = {
       total_sales_count: 0,
@@ -886,6 +886,7 @@ exports.getSalesStats = async (req, res) => {
       product_details: {},
       store_debt_received: 0,
       supplier_payments_total: 0,
+      supplier_debt_total: 0,
     };
 
     sales.forEach((sale) => {
@@ -975,6 +976,8 @@ exports.getSalesStats = async (req, res) => {
 
     // Yetkazib beruvchiga to'lovlar
     clients.forEach((client) => {
+      stats.supplier_debt_total += Number(client.totalDebt) || 0;
+
       (client.paymentHistory || []).forEach((p) => {
         if (p.amount && p.amount > 0) {
           stats.supplier_payments_total += p.amount;
