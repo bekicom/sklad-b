@@ -2,7 +2,6 @@ const Sale = require("../models/Sale");
 const Customer = require("../models/Customer");
 const Store = require("../models/Store");
 const Client = require("../models/Client");
-const { io } = require("../index");
 const Agent = require("../models/Agent");
 
 const FINAL_STATUSES = ["completed", "approved"];
