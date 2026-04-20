@@ -88,6 +88,11 @@ router.get(
   au.verifyToken,
   customerSaleController.getAllCustomers
 );
+router.put(
+  "/customers/:id",
+  au.verifyToken,
+  customerSaleController.updateCustomer
+);
 router.get(
   "/customers/debtors",
   au.verifyToken,

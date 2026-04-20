@@ -180,6 +180,53 @@ exports.getAllCustomers = async (req, res) => {
   }
 };
 
+// ✏️ Mijozni yangilash
+exports.updateCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, phone, address } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Customer ID noto'g'ri" });
+    }
+
+    if (!name?.trim() || !phone?.trim()) {
+      return res
+        .status(400)
+        .json({ message: "Mijoz nomi va telefon majburiy" });
+    }
+
+    const updatedCustomer = await Customer.findByIdAndUpdate(
+      id,
+      {
+        name: name.trim(),
+        phone: phone.trim(),
+        address: (address || "").trim(),
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!updatedCustomer) {
+      return res.status(404).json({ message: "Mijoz topilmadi" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Mijoz yangilandi",
+      customer: updatedCustomer,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Mijozni yangilashda xatolik",
+      error: err.message,
+    });
+  }
+};
+
 // 📄 Barcha mijoz sotuvlari (customerId optional)
 exports.getAllCustomerSales = async (req, res) => {
   try {
